@@ -88,6 +88,22 @@ def test_manager_follows_company_rules_from_the_ceo():
         assert spend["choice"] == 1
 
 
+@pytest.mark.parametrize("amount, correct_role", [("12", 0), ("12,01", 1), ("13", 1)])
+@pytest.mark.parametrize("reverse_options", [False, True])
+def test_discount_approval_uses_the_inherited_company_threshold(amount, correct_role, reverse_options):
+    options = [f"Ο Sales Manager εγκρίνει την έκπτωση {amount}%.",
+               f"Η έκπτωση {amount}% πάει στην CEO."]
+    if reverse_options:
+        options.reverse()
+    with TestClient(app) as c:
+        result = c.post("/api/twin/decide", headers=login(c, SALES), json={
+            "situation": f"Ο πελάτης ζητά έκπτωση {amount}% με SALE-DISC-v2.",
+            "options": options,
+        }).json()
+    assert result["choice"] == (1 - correct_role if reverse_options else correct_role)
+    assert any(t["id"] == "ceo.demo-sale-disc-v2" for t in result["traits"])
+
+
 def test_chat_small_talk_and_follow_ups():
     with TestClient(app) as c:
         hs = login(c, SALES)

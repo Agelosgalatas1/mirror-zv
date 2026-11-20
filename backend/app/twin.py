@@ -703,11 +703,57 @@ def _option_scores(prof: dict, situation: str, options: list[str]) -> tuple[list
     return scores, ranked
 
 
+def _discount_approval_route(prof: dict, situation: str, options: list[str]) -> tuple[int, dict] | None:
+    """Resolve an explicit choice of approver using the applicable discount band."""
+    rule = next((r for r in prof.get("decision_rules", [])
+                 if r.get("demo_policy") and r.get("discount_approval")), None)
+    if not rule:
+        return None
+    text = _fold(situation)
+    if re.search(r"\bv\s*(?!2\b)\d+\b", text):
+        return None
+    if not re.search(r"\bv\s*2\b", text) and re.search(r"\b20\d\d\b|\d{1,2}[/.-]\d{1,2}\b", text):
+        return None
+    discount = r"(?<!\w)(?:εκπτωσ\w*|discount)"
+    percent = r"(\d{1,3}(?:[.,]\d+)?)\s*%"
+    mentions = re.findall(discount + r"\s*(?:υψους\s+|of\s+)?" + percent, text)
+    mentions += re.findall(percent + r"\s+" + discount, text)
+    amounts = {float(value.replace(",", ".")) for value in mentions}
+    if len(amounts) != 1:
+        return None
+    amount = amounts.pop()
+    bands = rule["discount_approval"]
+    if not bands["draft_max"] < amount <= 100:
+        return None  # Draft eligibility also depends on margin.
+    expected = "ceo" if amount > bands["manager_max"] else "sales"
+    routes = []
+    for option in options:
+        option = _fold(option)
+        if (not re.search(r"εγκριν|εγκρισ|παει|κλιμακ|παραπεμπ|approve|approval|escalat", option)
+                or re.search(r"\b(?:δεν|χωρις|ουτε|not|never)\b", option)):
+            return None
+        ceo = bool(re.search(r"\bceo\b|\bδαν[αη]", option))
+        sales = bool(re.search(r"\bsales manager\b|αλεξανδρ|διευθυντ\w*\s+πωλησεων", option))
+        if ceo == sales:
+            return None  # The option must identify exactly one of the two approvers.
+        routes.append("ceo" if ceo else "sales")
+    if len(set(routes)) == 2 and routes.count(expected) == 1:
+        return routes.index(expected), rule
+    return None
+
+
 def _offline_decide(prof: dict, situation: str, options: list[str], hits: list[Hit]) -> dict:
-    scores, applied = _option_scores(prof, situation, options)
-    choice = max(range(len(options)), key=lambda i: scores[i])
+    routing = _discount_approval_route(prof, situation, options)
+    if routing:
+        choice, rule = routing
+        scores = [100.0 if i == choice else 0.0 for i in range(len(options))]
+        applied = [rule]
+        pattern_reasons = {}
+    else:
+        scores, applied = _option_scores(prof, situation, options)
+        choice = max(range(len(options)), key=lambda i: scores[i])
+        _, pattern_reasons = _decision_pattern_signals(situation, options)
     spread = max(scores) - min(scores)
-    _, pattern_reasons = _decision_pattern_signals(situation, options)
     if not applied and not pattern_reasons:
         choice = None
     unsure = choice is None or spread < 8
