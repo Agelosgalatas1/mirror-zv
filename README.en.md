@@ -6,9 +6,9 @@
 >
 > 🇬🇷 Ελληνική έκδοση: [README.md](README.md). The app UI is in Greek.
 
-MIRROR is an **inspectable AI digital twin**. It learns from a person's digital footprint (emails, chats, notes, documents) and then **answers, writes and decides the way that person would, and explains why**.
+MIRROR is an **inspectable AI Mirror**. It learns from a person's digital footprint (emails, chats, notes, documents) and then **answers, writes and decides the way that person would, and explains why**.
 
-It is deliberately *not* a chatbot with a persona prompt. The twin is built from four measurable parts:
+It is deliberately *not* a chatbot with a persona prompt. The Mirror is built from four measurable parts:
 
 | Part | What it is | How it is built |
 |---|---|---|
@@ -17,7 +17,7 @@ It is deliberately *not* a chatbot with a persona prompt. The twin is built from
 | **Style fingerprint** | How the person writes in each channel (external email, team chat, friends…) | Deterministic stylometry: 9 features, greetings, sign-offs, emoji, distinctive phrases |
 | **Owner control** | Boundaries, consent per source, right to be forgotten, audit, versioning | Product logic and the database, not prompts |
 
-Then we **prove** that it is really them: the **Fidelity Lab** tests the twin on decisions and replies it has never seen and compares it with a persona-prompt baseline.
+Then we **prove** that it is really them: the **Fidelity Lab** tests MIRROR on decisions and replies it has never seen and compares it with a persona-prompt baseline.
 
 **Quick navigation:** [Quick start](#quick-start) · [Login → interactive walkthrough](#from-login-to-interactive-use) · [Judges and `.env`](#running-the-judges-with-the-full-env) · [Inheritance](#company-login-and-inheritance) · [Learning](#4-self-test-your-mirror-learns-from-you) · [Architecture](#architecture) · [Demo limits](#demo-limits-and-enterprise-potential) · [Troubleshooting](#docker-commands-and-troubleshooting)
 
@@ -209,24 +209,24 @@ All people, documents, conversations and accounts shown in the screenshots are f
 - Values, knowledge, preferences, **decision rules** (when, prefers, avoids, numeric thresholds, company/personal **scope**), relationships, voice and unknowns, each backed by the messages that prove it; per-channel style fingerprints; versions and owner edits via `/api/profile*`.
 
 ### 6. Fidelity ("how do you prove it is really them?")
-A **temporal hold-out** split off before ingestion, so the twin is tested only on what it has never seen:
+A **temporal hold-out** split off before ingestion, so MIRROR is tested only on what it has never seen:
 
 | Metric | How |
 |---|---|
 | **Decision fidelity** | Predict the person's real choice in held-out dilemmas; compared with the persona-prompt baseline |
-| **Reply closeness** | Stylometric distance between the twin's draft and the real reply |
+| **Reply closeness** | Stylometric distance between MIRROR's draft and the real reply |
 | **Style match** | Similarity to her channel fingerprint (the real replies score 76%, our ceiling reference) |
 | **LLM-as-judge** | Blind pairwise (A/B order randomised): which candidate is closer to the real reply in substance and style |
 | **Knowledge recall** | Factual questions answered from memory |
-| **Honest abstention** | Questions she never answered must get "I don't know" (or a boundary): a twin that invents opinions is an impersonation risk |
+| **Honest abstention** | Questions she never answered must get "I don't know" (or a boundary): a Mirror that invents opinions is an impersonation risk |
 | **Human blind test** | People guess which reply is the real one; the fool rate is tracked |
 
 ### 7. Privacy (built in)
-- **The twin never sends anything**: it drafts, and the owner decides what to copy and send.
+- **MIRROR never sends anything**: it drafts, and the owner decides what to copy and send.
 - **Boundaries**: health, personal finances, politics/religion and relationships get "I'd rather answer that myself".
 - **Consent and deletion per source** on the Home page (My data).
-- **Disclosure** footer on drafts ("Drafted by a digital twin · reviewed by its owner"), to counter impersonation.
-- **Audit log** of every twin and owner action (API keys are never logged).
+- **Disclosure** footer on drafts ("Drafted by MIRROR · reviewed by its owner"), to counter impersonation.
+- **Audit log** of every MIRROR and owner action (API keys are never logged).
 - Only **redacted** text ever reaches an LLM. Raw uploads are discarded after parsing. Storage is local SQLite in a Docker volume.
 - With Ollama, LLM requests can run locally. If ElevenLabs or Simli is enabled, the corresponding data/text is sent to those providers.
 
@@ -248,7 +248,7 @@ flowchart LR
   DB --> S[Stylometry<br/>per-channel fingerprint]
   X --> PM[Persona model<br/>values · knowledge · preferences ·<br/>decision rules · relationships]
   S --> PM
-  PM --> T{Twin}
+  PM --> T{Mirror}
   M --> T
   T -->|Ask · Write · Decide| O[Answer + why + traits + memories<br/>confidence · style match · unsure]
   O -->|copy| Q[Owner decides what to send]
@@ -275,11 +275,11 @@ flowchart LR
 **Frontend** (`frontend/`, our team's MIRROR web app from the ZV repo: plain HTML/CSS/JavaScript, no framework, no build step): login, the team pyramid, conversations, Text / Voice / Avatar, Voice avatar and self-test, all in Greek. Server data is always inserted as text, never HTML; responsive, keyboard-navigable, ARIA roles, light/dark theme, `prefers-reduced-motion`. The Simli client is a local bundle (`vendor/simli.bundle.js`, MIT; licences in `vendor/SIMLI-LICENSES.txt`).
 
 ### Design choices
-- **Structured outputs everywhere.** The twin returns JSON (answer, why, trait_refs, memory_refs, confidence, unsure), so every claim is traceable and the UI can show *why*.
+- **Structured outputs everywhere.** MIRROR returns JSON (answer, why, trait_refs, memory_refs, confidence, unsure), so every claim is traceable and the UI can show *why*.
 - **Measure style with numbers, not with the LLM.** Stylometry is deterministic, so it can be a fair metric and a guardrail at the same time.
 - **Graceful fallback for LLM text.** Anthropic → OpenAI → Ollama → offline. The app starts without an LLM key; voice and avatar need ElevenLabs/Simli keys.
 - **Evidence-first persona.** A trait with no surviving evidence is dropped, which makes the right to be forgotten real.
-- **No fine-tuning on purpose.** RAG + profile extraction keeps the twin current (new data → rebuild → diff), auditable and deletable; fine-tuned weights can't forget.
+- **No fine-tuning on purpose.** RAG + profile extraction keeps MIRROR current (new data → rebuild → diff), auditable and deletable; fine-tuned weights can't forget.
 
 ---
 
@@ -309,5 +309,5 @@ With the right engineering team, budget and infrastructure, the concept could gr
 
 ## Responsible AI notes
 - Synthetic data only; no real person's data is included.
-- The twin is a drafting and decision-support tool for its **owner**. It never acts autonomously, discloses itself, abstains on unknown or sensitive topics, and every action is audited.
-- GDPR principles applied: data minimisation (redaction, no raw-file retention), purpose limitation (owner-only twin), consent per source, erasure (forget source → traits disappear), transparency (evidence and why on every answer).
+- MIRROR is a drafting and decision-support tool for its **owner**. It never acts autonomously, discloses itself, abstains on unknown or sensitive topics, and every action is audited.
+- GDPR principles applied: data minimisation (redaction, no raw-file retention), purpose limitation (owner-only Mirror), consent per source, erasure (forget source → traits disappear), transparency (evidence and why on every answer).
