@@ -68,16 +68,14 @@ def persona_digest(prof: dict) -> str:
 
 
 def _query_vec(text: str):
-    if not INDEX.has_embeddings:
+    if sharing.restricted() or not INDEX.has_embeddings:
         return None
     v = LLM_CLIENT.embed([text])
     return v[0] if v else None
 
 
-# Επεξήγηση: Η πρόσβαση σε ιδιωτικές μνήμες μπλοκάρεται για ξένο χρήστη.
+# Επεξήγηση: Το ευρετήριο εφαρμόζει το πεδίο πρόσβασης του χρήστη.
 def memories(query: str, k: int = 8) -> list[Hit]:
-    if sharing.restricted():
-        return []
     where = (lambda it: it.get("id") not in EXCLUDE) if EXCLUDE else None
     return INDEX.search(query, k=k, query_vec=_query_vec(query), where=where)
 
@@ -107,12 +105,16 @@ def format_profile_facts(prof: dict, question: str, k: int = 6) -> str:
 
 
 def exemplars(channel: str, query: str, n: int = 4) -> list[dict]:
+    seeds = [item for item in sharing.demo_style_examples(pid()) if item["id"] not in EXCLUDE]
     if sharing.restricted():
-        return []
+        return seeds[:n]
     hits = INDEX.search(query, k=n, where=lambda it: bool(it.get("is_owner")) and it.get("channel") == channel
                         and it.get("id") not in EXCLUDE)
     seen = {h.item_id for h in hits}
     picked = [h.item for h in hits]
+    if seeds and not seen.intersection(item["id"] for item in seeds):
+        picked = picked[:max(0, n - 1)] + [seeds[0]]
+        seen.add(seeds[0]["id"])
     if len(picked) < n:
         rows = db.query(
             "SELECT i.* FROM items i JOIN sources s ON s.id=i.source_id WHERE s.consent=1 AND i.is_owner=1 "
@@ -646,8 +648,12 @@ def _option_scores(prof: dict, situation: str, options: list[str]) -> tuple[list
     applied: dict[str, dict] = {}
     contrib: list[dict[str, float]] = [{} for _ in options]
     amount = _amount(situation)
-    percent = _percent_value(situation) if re.search(r"εκπτωσ|discount|concession", _fold(situation)) else None
+    folded = _fold(situation)
+    percent = _percent_value(situation) if re.search(r"εκπτωσ|discount|concession", folded) else None
     for r in rules:
+        applicability = r.get("decide_matches") if r.get("demo_policy") else None
+        if applicability and not re.search(applicability, folded):
+            continue
         prefers = list(r.get("prefers", []))
         th = r.get("threshold")
         if th and amount is not None:
@@ -812,6 +818,21 @@ def _format_history(history: list[dict] | None) -> str:
     return "\n".join(lines) or "(new conversation)"
 
 
+def _search_terms(question: str) -> str:
+    """Match business terms in natural Greek to the wording used in the source files."""
+    folded = _fold(question)
+    extra = []
+    if "καθυστερ" in folded and re.search(r"πληρωμ|τιμολογ|πελατ|παραγγελ", folded):
+        extra.append("ληξιπρόθεσμα overdue FIN-CREDIT exception review")
+    if ("τριμην" in folded and re.search(r"προτεραιο|pipeline|αναθεσ", folded)
+            and not re.search(r"\b(?:q[1-4]|20\d\d)\b", folded)):
+        extra.append("Q4 2026 προτεραιότητες")
+    if ("εκπτωσ" in folded and re.search(r"εγκριν|υπογραφ|ορι", folded)
+            and not re.search(r"\bv\s*\d+\b|\b20\d\d\b", folded)):
+        extra.append("SALE-DISC-v2 έγκριση έκπτωσης")
+    return " ".join([question, *extra])
+
+
 # Επεξήγηση: Απαντά με προφίλ, σχετικά αποσπάσματα και ιστορικό· διαθέτει και offline διαδρομή.
 def ask(question: str, channel: str = "chat_team", *, log: bool = True, history: list[dict] | None = None) -> dict:
     prof = _profile()
@@ -822,7 +843,8 @@ def ask(question: str, channel: str = "chat_team", *, log: bool = True, history:
         res = _boundary_reply(b, owner.display_name)
     else:
         last_user = next((h.get("text", "") for h in reversed(history or []) if h.get("role") == "user"), "")
-        hits = memories(question + (" " + last_user if len(_words(question)) <= 3 else ""), k=8)
+        query = question + (" " + last_user if len(_words(question)) <= 3 else "")
+        hits = memories(_search_terms(query), k=8)
         res = None
         if LLM_CLIENT.available:
             try:

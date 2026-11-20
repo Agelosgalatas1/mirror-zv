@@ -80,7 +80,7 @@ The `.env` is emailed directly to the judges and is not uploaded to GitHub.
 
 - `AUTO_SEED=true` initializes an empty installation only. A snapshot update refreshes only the untouched built-in profile; it does not delete chats, sources or owner-edited / LLM-built profiles.
 - **Before a presentation:** open the self-test and company-rules section as the profile owner. Review each rule and publish only the rules intended for descendants to inherit.
-- Only company values and rules explicitly approved and published by their owner are inherited. Personal memories and original evidence remain private.
+- The synthetic demo includes the CEO's core company rules from DOC02. Owners can publish additional rules in Self-test. Personal memories stay with their owner.
 - To intentionally reset the demo database, the CEO uses the in-app reset action. A backup is created first.
 
 ## Company, login and inheritance
@@ -113,9 +113,9 @@ flowchart TB
 Solid arrows show reporting lines. Dashed arrows show inheritance of company-scope values and decision rules only. Chat access goes upward: employees can reach their manager and the CEO, while managers can reach the CEO; there is no sideways or downward access.
 
 - The **CEO and two managers have their own AI Mirror and memory**; a manager cannot see the other manager’s data. Employees do not have their own AI copy yet.
-- **Inheritance:** a manager's Mirror inherits only the CEO's company values and rules that she explicitly approves and publishes. Published CEO rules take precedence over local rules; her private memories and personal rules are not inherited.
+- **Inheritance.** The Sales and Finance Mirrors use the CEO's core company policies and any additional company values or rules she publishes. The applicable CEO policy takes precedence when a local rule conflicts.
 - In practice, only **company-scope values and decision rules** pass down the reporting chain. Traits marked `personal` stay with their owner. Inherited items are read-only in a manager profile, keep their source/evidence, and are placed before that manager’s own rules so company policy wins a conflict.
-- **Access to your own Mirror and your managers’ Mirrors:** the CEO and managers can chat with their own Mirror and run a **self-test**. Employees can chat with their manager’s Mirror and the CEO’s. Chats with managers’ Mirrors use the company rules and values approved for publication. The server enforces these permissions.
+- **Access to your own Mirror and your managers’ Mirrors:** the CEO and managers can chat with their own Mirror and run a **self-test**. Employees can chat with their manager’s Mirror and the CEO’s. Chats with managers’ Mirrors use each Mirror's selected synthetic documents and communication examples, together with shared company rules. The server enforces these permissions.
 
 ### Demo accounts and access
 

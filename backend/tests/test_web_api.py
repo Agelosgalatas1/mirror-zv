@@ -70,6 +70,39 @@ def test_owner_chat_can_retrieve_zv_sources(monkeypatch, person, username, passw
         assert response.json()["explain"]["sources"]
 
 
+@pytest.mark.parametrize("target, username, password, title, voice_phrase", [
+    ("ceo", "sales_manager", "sales2026", "Q4 2026 — Προτεραιότητες, επενδύσεις, αναθέσεις",
+     "Δεν χρειάζεται να υπερασπιστείς μια επιλογή"),
+    ("sales", "sales_employee", "employee2026", "Οδηγός ομάδας Sales: SALE-DISC-v2",
+     "Ποιο είναι το ένα σημείο που πρέπει να ξεκαθαρίσουμε πρώτα"),
+    ("finance", "finance_employee", "employee2026", "FIN-CREDIT-v2 — Πιστωτική Πολιτική Πελατών",
+     "Ποιο παραστατικό μπορούμε να ελέγξουμε πρώτο"),
+])
+def test_reporting_line_chat_combines_shared_business_sources_and_target_voice(
+    monkeypatch, target, username, password, title, voice_phrase,
+):
+    from app import twin
+
+    calls = []
+
+    def answer_with_evidence(system, user, **kwargs):
+        calls.append((system, user))
+        return {"answer": "Απάντηση με πηγές.", "memory_refs": ["M1"], "confidence": 0.9}
+
+    with TestClient(app) as c:
+        web_login(c, username, password)
+        monkeypatch.setattr(twin.LLM_CLIENT, "provider", "openai")
+        monkeypatch.setattr(twin.LLM_CLIENT, "json", answer_with_evidence)
+        result = c.post(f"/api/mirrors/{target}/ask", json={"question": title}, headers=H)
+        assert result.status_code == 200
+        assert result.json()["explain"]["sources"]
+    system, prompt = calls[0]
+    assert title in prompt.split("RELEVANT PROFILE TRAITS", 1)[0]
+    assert voice_phrase in prompt.split("Examples of how", 1)[1].split("CONVERSATION SO FAR", 1)[0]
+    if target != "ceo":
+        assert "ceo.demo-sale-disc-v2" in system and "INHERITED" in system
+
+
 def test_conversation_flow_and_access_errors():
     with TestClient(app) as c:
         web_login(c, "sales_manager", "sales2026")

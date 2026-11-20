@@ -816,7 +816,7 @@ async function startSelfTest() {
     }
     const publications = () => h("details", { class: "self-test-history publication-review", open: model.publicationsOpen, ontoggle: e => { model.publicationsOpen = e.target.open; } },
       h("summary", {}, "Εταιρικοί κανόνες για την ομάδα"),
-      h("p", { class: "muted" }, "Μόνο όσα δημοσιεύεις εδώ χρησιμοποιούνται από άλλους και κληρονομούνται. Έλεγξε όλο το κείμενο: οι ιδιωτικές πηγές δεν κοινοποιούνται. Αλλαγή κανόνα απαιτεί νέα δημοσίευση."),
+      h("p", { class: "muted" }, "Εδώ εγκρίνεις πρόσθετους κανόνες για κοινοποίηση και κληρονομικότητα. Οι βασικές εταιρικές πολιτικές του συνθετικού demo είναι ήδη διαθέσιμες."),
       ...(model.snapshot.company_rules || []).map(rule => h("article", { class: "self-test-event" },
         h("div", { class: "self-test-event-copy" }, h("b", {}, rule.text),
           ...[rule.content?.first_person && rule.content.first_person !== rule.text ? `Διατύπωση: ${rule.content.first_person}` : "",

@@ -388,7 +388,7 @@ def inherited_traits(person_id: str | None = None) -> list[dict]:
             who = owner_dict(anc)
         if not prof:
             continue
-        for t in sharing.approved_traits(anc, prof):
+        for t in sharing.demo_rules(anc) + sharing.approved_traits(anc, prof):
             out.append({**t, "id": f"{anc}.{t['id']}",
                         "inherited_from": {"id": anc, "name": who.get("name"), "display_name": who.get("display_name"),
                                            "role": who.get("role"), "level": level}})

@@ -7,6 +7,7 @@ BM25 uses accent-folded tokens plus 5-char prefixes so Greek inflections
 """
 from __future__ import annotations
 
+import itertools
 import math
 import re
 import threading
@@ -137,7 +138,8 @@ class MemoryIndex:
         where: Callable[[dict], bool] | None = None,
         query_vec: np.ndarray | None = None,
     ) -> list[Hit]:
-        if sharing.restricted(self.person):
+        shared_ids = sharing.demo_source_ids(self.person, "business") if sharing.restricted(self.person) else None
+        if shared_ids == frozenset():
             return []
         with self._lock:
             if not self.chunks:
@@ -146,18 +148,17 @@ class MemoryIndex:
             if query_vec is not None and self.emb is not None:
                 rankings.append(self._dense(query_vec))
             fused: dict[int, float] = defaultdict(float)
-            raw: dict[int, float] = {}
             for ranking in rankings:
-                for rank, (i, s) in enumerate(ranking[:60]):
+                eligible = (i for i, _ in ranking
+                            if (shared_ids is None or self.chunks[i]["source_id"] in shared_ids)
+                            and (where is None or where(self.items.get(self.chunks[i]["item_id"], {}))))
+                for rank, i in enumerate(itertools.islice(eligible, 60)):
                     fused[i] += 1.0 / (60 + rank)
-                    raw[i] = max(raw.get(i, 0.0), s)
             out: list[Hit] = []
             seen_items: set[str] = set()
             for i, s in sorted(fused.items(), key=lambda x: -x[1]):
                 ch = self.chunks[i]
                 item = self.items.get(ch["item_id"], {})
-                if where and not where(item):
-                    continue
                 if ch["item_id"] in seen_items and len(out) >= k // 2:
                     continue
                 seen_items.add(ch["item_id"])

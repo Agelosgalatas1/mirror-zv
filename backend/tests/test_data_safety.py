@@ -56,7 +56,8 @@ def publish(c, headers, tid):
 
 def inherited(c, h):
     p = c.get('/api/profile', headers=h).json()
-    return p['inherited']['decision_rules'] + p['inherited']['values']
+    traits = p['inherited']['decision_rules'] + p['inherited']['values']
+    return [trait for trait in traits if not trait.get("demo_policy")]
 
 
 @pytest.mark.parametrize('edit_profile', [False, True])
@@ -150,7 +151,8 @@ def test_private_ceo_data_never_reaches_manager_profile_or_model(monkeypatch):
         tid=add(c,hc);publish(c,hc,tid)
         public=c.get('/api/profile?target=ceo',headers=hs)
         assert secret not in public.text
-        assert not public.json()['knowledge'] and not public.json()['style']
+        assert all(t["id"] == "demo-q4-priorities" for t in public.json()["knowledge"])
+        assert not public.json()['style']
         iid=source['source_id']+'-000'
         assert c.get('/api/items/'+iid,headers=hs).status_code==404
         assert secret in c.get('/api/items/'+iid,headers=hc).text
@@ -166,17 +168,47 @@ def test_private_ceo_data_never_reaches_manager_profile_or_model(monkeypatch):
                           ('/api/twin/decide',{'situation':'Διάλεξε πλαίσιο pilot.','options':['Μικρό pilot','Μεγάλη δέσμευση']})]:
             r=c.post(path,headers=hs,json={**body,'target':'ceo'})
             assert r.status_code==200,r.text
-            assert secret not in r.text and not r.json().get('memories')
+            assert secret not in r.text
+            allowed_sources = sharing.DEMO_ACCESS["ceo"]["business"]
+            assert all(m["source_id"] in allowed_sources for m in r.json().get("memories", []))
         assert len(calls)==3 and all(secret not in payload for payload in calls)
         # Even guessing a known private item/trait ID cannot recover raw evidence.
         v=CURRENT_VIEWER.set('sales')
         try:
             with as_person('ceo'):
-                assert twin.exemplars('chat_team','pilot')==[]
+                assert twin.exemplars('chat_team', 'pilot')
+                assert all(e["source_id"] in sharing.DEMO_ACCESS["ceo"]["style"]
+                           for e in twin.exemplars('chat_team', 'pilot'))
                 assert twin._nearest_reply('pilot','chat_team')==(None,0.0)
                 assert twin._evidence_quote({'evidence':[iid]},'pilot') is None
-                assert retrieval.INDEX.search('pilot')==[]
+                assert all(h.source_id in sharing.DEMO_ACCESS["ceo"]["business"]
+                           for h in retrieval.INDEX.search('pilot'))
         finally:CURRENT_VIEWER.reset(v)
+
+
+def test_bundled_company_rules_reach_both_managers_and_follow_source_consent():
+    with TestClient(app) as c:
+        ceo = login(c)
+        managers = [login(c, "sales_manager", "sales2026"), login(c, "finance_manager", "finance2026")]
+        policy_source = sharing.DEMO_ACCESS["ceo"]["policy_source"]
+
+        def rules(headers):
+            return c.get("/api/profile", headers=headers).json()["inherited"]["decision_rules"]
+
+        for headers in managers:
+            inherited_rule = next(t for t in rules(headers) if t["id"] == "ceo.demo-sale-disc-v2")
+            assert inherited_rule["inherited_from"]["id"] == "ceo"
+            assert "Πάνω από 12%" in inherited_rule["rule"]
+            assert not inherited_rule["evidence"]
+
+        answer = c.post("/api/mirrors/ceo/ask", headers=managers[0],
+                        json={"question": "Τι είναι προτεραιότητα αυτό το τρίμηνο;"}).json()
+        assert not answer["explain"]["unsure"] and "renewals" in answer["answer"].lower()
+        assert any("Q4 2026" in source["label"] for source in answer["explain"]["sources"])
+
+        assert c.patch(f"/api/sources/{policy_source}", json={"consent": False}, headers=ceo).status_code == 200
+        for headers in managers:
+            assert not any(t.get("demo_policy") for t in rules(headers))
 
 
 def test_legacy_history_and_audio_cannot_bypass_new_privacy_rules():
