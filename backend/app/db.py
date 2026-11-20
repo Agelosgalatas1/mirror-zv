@@ -19,6 +19,11 @@ _LOCK = threading.RLock()
 _CONN: sqlite3.Connection | None = None
 
 SCHEMA = """
+CREATE TABLE IF NOT EXISTS trait_publications (
+    person_id TEXT NOT NULL, trait_id TEXT NOT NULL, section TEXT NOT NULL,
+    content_hash TEXT NOT NULL, approved_by TEXT NOT NULL, approved_at REAL NOT NULL,
+    PRIMARY KEY(person_id, trait_id)
+);
 CREATE TABLE IF NOT EXISTS persons (
     id TEXT PRIMARY KEY,
     name TEXT NOT NULL,
@@ -189,6 +194,9 @@ def connect() -> sqlite3.Connection:
             conn.execute("PRAGMA journal_mode=WAL")
             conn.execute("PRAGMA foreign_keys=ON")
             conn.executescript(SCHEMA)
+            columns = {r[1] for r in conn.execute('PRAGMA table_info(voice_turns)')}
+            if 'access_fingerprint' not in columns:
+                conn.execute("ALTER TABLE voice_turns ADD COLUMN access_fingerprint TEXT NOT NULL DEFAULT ''")
             _CONN = conn
         return _CONN
 
@@ -268,5 +276,22 @@ def reset_all() -> None:
     conn = connect()
     with _LOCK:
         for table in ("chunks", "items", "sources", "profile_versions", "drafts", "eval_runs", "blind_votes", "audit",
-                      "messages", "conversations", "persona_feedback", "voice_turns", "self_test_events"):
+                      "messages", "conversations", "persona_feedback", "voice_turns", "self_test_events", "trait_publications"):
             conn.execute(f"DELETE FROM {table}")
+
+
+def backup() -> str:
+    """Consistent SQLite backup before an explicitly requested destructive demo reset."""
+    from datetime import datetime, timezone
+    folder = settings.data_dir / 'backups'
+    folder.mkdir(parents=True, exist_ok=True, mode=0o700)
+    import uuid
+    path = folder / ('mirror-' + datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%S') + '-' + uuid.uuid4().hex[:8] + '.db')
+    with _LOCK:
+        destination = sqlite3.connect(path)
+        try:
+            connect().backup(destination)
+        finally:
+            destination.close()
+    path.chmod(0o600)
+    return path.name

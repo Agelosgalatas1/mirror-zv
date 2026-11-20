@@ -770,7 +770,7 @@ async function startSelfTest() {
 
   showOverlay(done => {
     const model = { snapshot: initial, phase: "choose", current: null, answer: "", correction: "", correctionOpen: false,
-      customDraft: "", chosenQuestion: "", chosenQuestionTopic: "", selectedTopic: initial.next_topic || initial.topics[0]?.topic || "", busy: false, error: "", lastFeedback: null };
+      publicationsOpen: false, customDraft: "", chosenQuestion: "", chosenQuestionTopic: "", selectedTopic: initial.next_topic || initial.topics[0]?.topic || "", busy: false, error: "", lastFeedback: null };
     const panel = h("div", { class: "self-test-panel" });
     const close = h("button", { class: "iconbtn", type: "button", "aria-label": "Κλείσιμο self-test", onclick: () => done(false) }, icon(I.close));
     const frame = h("section", { class: "dialog self-test-dialog", role: "dialog", "aria-modal": "true", "aria-labelledby": "self-test-title" },
@@ -791,6 +791,28 @@ async function startSelfTest() {
         event.feedback && !event.undone_at ? h("button", { class: "btn compact", type: "button", disabled: model.busy,
           onclick: () => undo(event.event_id) }, "Αναίρεση") : null))
         : h("p", { class: "self-test-empty" }, "Οι ερωτήσεις και η πρόοδός σου εμφανίζονται μόνο σε εσένα."));
+
+    async function publishRule(rule) {
+      model.busy = true; model.error = ""; render();
+      try {
+        const result = await api(`/api/profile/traits/${encodeURIComponent(rule.id)}/publication`,
+          { published: !rule.published, content_hash: rule.content_hash });
+        model.snapshot.company_rules = result.rules;
+      } catch (error) { setError(error); }
+      finally { model.busy = false; render(); }
+    }
+    const publications = () => h("details", { class: "self-test-history publication-review", open: model.publicationsOpen, ontoggle: e => { model.publicationsOpen = e.target.open; } },
+      h("summary", {}, "Εταιρικοί κανόνες για την ομάδα"),
+      h("p", { class: "muted" }, "Μόνο όσα δημοσιεύεις εδώ χρησιμοποιούνται από άλλους και κληρονομούνται. Έλεγξε όλο το κείμενο: οι ιδιωτικές πηγές δεν κοινοποιούνται. Αλλαγή κανόνα απαιτεί νέα δημοσίευση."),
+      ...(model.snapshot.company_rules || []).map(rule => h("article", { class: "self-test-event" },
+        h("div", { class: "self-test-event-copy" }, h("b", {}, rule.text),
+          ...[rule.content?.first_person && rule.content.first_person !== rule.text ? `Διατύπωση: ${rule.content.first_person}` : "",
+              rule.content?.when ? `Πότε ισχύει: ${rule.content.when}` : "",
+              rule.content?.prefers?.length ? `Προτιμά: ${rule.content.prefers.join(", ")}` : "",
+              rule.content?.avoids?.length ? `Αποφεύγει: ${rule.content.avoids.join(", ")}` : ""].filter(Boolean).map(text => h("p", {}, text)),
+          h("small", {}, rule.published ? "Δημοσιευμένο στην ομάδα" : "Δεν έχει δημοσιευτεί")),
+        h("button", { class: "btn compact", type: "button", disabled: model.busy,
+          onclick: () => publishRule(rule) }, rule.published ? "Ανάκληση δημοσίευσης" : "Έγκριση και δημοσίευση"))));
 
     function setError(error) { model.error = error?.message || "Κάτι πήγε στραβά. Δοκίμασε ξανά."; }
     async function undo(eventId) {
@@ -888,7 +910,7 @@ async function startSelfTest() {
           h("div", { class: "self-test-actions" }, h("button", { class: "btn primary", type: "button", onclick: () => { model.phase = "choose"; model.current = null; model.lastFeedback = null; render(); } }, "Επόμενη ερώτηση"),
             h("button", { class: "btn", type: "button", onclick: () => done(false) }, "Τέλος")));
       }
-      fill(panel, progress(), error, stage, history(),
+      fill(panel, progress(), error, stage, publications(), history(),
         h("p", { class: "self-test-privacy" }, "Η πρόοδος φαίνεται μόνο σε εσένα. Οι διορθώσεις σου γίνονται μέρος του προφίλ σου και μπορείς να τις αναιρέσεις."));
     }
     render();

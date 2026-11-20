@@ -36,7 +36,7 @@ Open **http://localhost:8000**. That's it.
 - You can also paste a key **at runtime** from the UI (the status button at the bottom left). Keys stay in memory only.
 - **Fully local option:** `docker compose --profile local-llm up --build`, then `docker compose exec ollama ollama pull qwen2.5:7b`, and set `LLM_PROVIDER=ollama`, `OLLAMA_BASE_URL=http://ollama:11434` in `.env`.
 
-The first start seeds the **synthetic company NexaTech Solutions** (see below), so the demo works immediately. Data persists in the `mirror-data` Docker volume and is re-seeded automatically when the shipped demo files change. `docker compose down -v` wipes everything.
+The first start seeds the **synthetic company NexaTech Solutions** (see below), so the demo works immediately. Data persists in the `mirror-data` Docker volume and is preserved when bundled demo files or snapshots change. Startup never resets a populated database. `docker compose down -v` deletes the data volume and is not an upgrade step.
 
 Requirements: Docker with Compose v2 (Linux, macOS or Windows). The image is `python:3.12-slim-bookworm` with the frontend built in a `node:20-bookworm-slim` stage, and runs on amd64 and arm64.
 
@@ -47,7 +47,7 @@ Requirements: Docker with Compose v2 (Linux, macOS or Windows). The image is `py
 The demo company is **NexaTech Solutions** (fictional B2B technology supplier), built from our team's synthetic datasets (ZV repo, `sources/`). A three-level pyramid as in ZV: **Danai Karra (CEO)**; **Alexandros Petrou (Sales Manager)** and **Myrto Antoniou (Finance Manager)** reporting only to her; and under them **Nikos Dimitriou (Sales Employee)** and **Eleni Nikolaou (Finance Employee)**. Employees have no AI of their own yet: they chat with their manager's Mirror and the CEO's.
 
 - **Everyone has their own AI counterpart (a "Mirror")** and their own memory; a manager never sees the other manager's data.
-- **Inheritance:** a manager's Mirror inherits the CEO's company values and decision rules (no exclusivity deals, >12% discount and net90 only by the CEO, a human always sends the final offer). On conflict the CEO's rule wins and the AI says where it came from. The CEO's personal rules are not inherited.
+- **Inheritance:** a manager's Mirror inherits only company values and decision rules explicitly reviewed and published by the CEO (no exclusivity deals, >12% discount and net90 only by the CEO, a human always sends the final offer). On conflict the CEO's rule wins and the AI says where it came from. The CEO's personal rules are not inherited.
 - **Upward-only access, enforced on the server:** a manager chats with the CEO's Mirror, never sideways. The CEO is at the top, so she runs the **self-test** on her own Mirror.
 
 | Role | Username | Email | Password |
@@ -219,3 +219,31 @@ mirror/
 - Synthetic data only; no real person's data is included.
 - The twin is a drafting and decision-support tool for its **owner**. It never acts autonomously, discloses itself, abstains on unknown or sensitive topics, and every action is audited.
 - GDPR principles applied: data minimisation (redaction, no raw-file retention), purpose limitation (owner-only twin), consent per source, erasure (forget source → traits disappear), transparency (evidence and why on every answer).
+
+## Data preservation and explicit publication
+
+Startup seeds only an empty installation. Existing sources, chats, profiles,
+identities and passwords survive changes to the bundled demo and snapshots.
+Only the CEO may explicitly reset the demo through `POST /api/reset-demo` with
+`{"confirmation":"RESET_DEMO"}`. A consistent SQLite backup is created under
+`/data/backups/` before this destructive operation.
+
+To prepare the demo, each owner opens their own self-test and expands
+**Εταιρικοί κανόνες για την ομάδα**. Review each rule and click
+**Έγκριση και δημοσίευση**. No bundled snapshot or AI output is automatically
+approved. Only explicitly company-scoped values and decision rules can be
+published; approval is a separate server record bound to the exact reviewed
+content and evidence. Editing a rule requires reapproval. Use
+**Ανάκληση δημοσίευσης** to withdraw it.
+
+Consulting an ancestor's Mirror uses only these public rules, without the
+ancestor's raw memory, source citations, private profile or style examples.
+Evaluations and jobs are owner-only. Legacy or revoked shared conversation
+content and audio are excluded from retrieval and replay, without deleting
+stored data. Normal chat, voice and feedback do not publish or train rules.
+
+API: `POST /api/profile/traits/{id}/publication` takes `published` and the
+`content_hash` supplied by the owner's `/api/self-test` company-rule review.
+Missing or stale review hashes fail closed. Owner-created traits default to
+personal; set `scope=company` explicitly when adding an eligible rule, then
+review and publish it separately.

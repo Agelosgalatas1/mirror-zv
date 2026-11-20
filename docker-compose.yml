@@ -28,7 +28,7 @@ services:
       SIMLI_ENABLED: ${SIMLI_ENABLED:-auto}
       SIMLI_DAILY_SECONDS: ${SIMLI_DAILY_SECONDS:-600}
       OLLAMA_MODEL: ${OLLAMA_MODEL:-qwen2.5:7b}
-      AUTO_SEED: ${AUTO_SEED:-true}                # load the synthetic NexaTech demo data (re-seeded when it changes)
+      AUTO_SEED: ${AUTO_SEED:-true}                # initialize synthetic demo only when the database is empty
     volumes:
       - mirror-data:/data
     restart: unless-stopped

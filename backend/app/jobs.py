@@ -7,7 +7,7 @@ import traceback
 import uuid
 from typing import Any, Callable
 
-from .context import as_person, pid
+from .context import CURRENT_VIEWER, as_person, pid
 
 _JOBS: dict[str, dict[str, Any]] = {}
 _LOCK = threading.Lock()
@@ -28,9 +28,11 @@ def start(kind: str, fn: Callable[[Callable[[float, str], None]], Any]) -> dict:
         job["message"] = msg
 
     person = pid()
+    viewer = CURRENT_VIEWER.get()
     job["person"] = person
 
     def runner() -> None:
+        token = CURRENT_VIEWER.set(viewer)
         try:
             with as_person(person):
                 job["result"] = fn(progress)
@@ -41,6 +43,8 @@ def start(kind: str, fn: Callable[[Callable[[float, str], None]], Any]) -> dict:
             job["status"] = "error"
             job["error"] = f"{type(exc).__name__}: {exc}"
             job["trace"] = traceback.format_exc()[-2000:]
+        finally:
+            CURRENT_VIEWER.reset(token)
         job["finished"] = time.time()
 
     threading.Thread(target=runner, daemon=True, name=f"job-{kind}").start()

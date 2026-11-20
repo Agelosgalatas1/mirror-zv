@@ -19,7 +19,7 @@ from collections import Counter, defaultdict
 from concurrent.futures import ThreadPoolExecutor
 from typing import Any, Callable
 
-from . import db, prompts
+from . import db, prompts, sharing
 from .config import settings
 from .context import as_person, pid
 from .ingest.pipeline import ancestors, get_owner, owner_dict
@@ -319,6 +319,12 @@ def snapshot_hash(raw: bytes | None = None) -> str | None:
 # ------------------------------------------------------------------ versions
 
 def save_version(profile: dict, method: str, note: str = "") -> int:
+    # Discard changed approvals, so reverting/reusing an ID cannot revive them.
+    for record in db.query('SELECT * FROM trait_publications WHERE person_id=?', (pid(),)):
+        trait = next((t for t in profile.get(record['section'], []) if t['id']==record['trait_id']), None)
+        if (not trait or trait.get('scope') != 'company'
+                or sharing.content_hash(record['section'], trait) != record['content_hash']):
+            db.execute('DELETE FROM trait_publications WHERE person_id=? AND trait_id=?', (pid(), record['trait_id']))
     vid = db.execute("INSERT INTO profile_versions(created_at, person_id, method, note, profile) VALUES(?,?,?,?,?)",
                      (time.time(), pid(), method, note, db.dumps(profile)))
     db.audit("system" if method != "owner-edit" else "owner", "profile_version", version=vid, method=method)
@@ -373,13 +379,10 @@ def inherited_traits(person_id: str | None = None) -> list[dict]:
             who = owner_dict(anc)
         if not prof:
             continue
-        for sec in INHERITABLE:
-            for t in prof.get(sec, []):
-                if t.get("scope") == "personal":
-                    continue
-                out.append({**t, "id": f"{anc}.{t['id']}", "section": sec,
-                            "inherited_from": {"id": anc, "name": who.get("name"), "display_name": who.get("display_name"),
-                                               "role": who.get("role"), "level": level}})
+        for t in sharing.approved_traits(anc, prof):
+            out.append({**t, "id": f"{anc}.{t['id']}",
+                        "inherited_from": {"id": anc, "name": who.get("name"), "display_name": who.get("display_name"),
+                                           "role": who.get("role"), "level": level}})
     return out
 
 
@@ -388,7 +391,7 @@ def with_inheritance(prof: dict) -> dict:
     inh = inherited_traits()
     prof = dict(prof)
     prof["inherited"] = {
-        "from": [owner_dict(a) for a in ancestors(pid())],
+        "from": [sharing.public_identity(a) for a in ancestors(pid())],
         "values": [t for t in inh if t["section"] == "values"],
         "decision_rules": [t for t in inh if t["section"] == "decision_rules"],
     }
@@ -400,12 +403,14 @@ def for_twin() -> dict | None:
     prof = current()
     if not prof:
         return None
+    if sharing.restricted():
+        prof = sharing.public_profile(prof, pid())
     inh = inherited_traits()
     if inh:
         prof = dict(prof)
         for sec in INHERITABLE:
             prof[sec] = [t for t in inh if t["section"] == sec] + list(prof.get(sec, []))
-        prof["inherited_from"] = [owner_dict(a) for a in ancestors(pid())]
+        prof["inherited_from"] = [sharing.public_identity(a) for a in ancestors(pid())]
     return prof
 
 
@@ -455,14 +460,14 @@ def owner_edit(trait_id: str, action: str, text: str | None = None) -> dict:
     raise KeyError(trait_id)
 
 
-def add_owner_trait(section: str, text: str) -> dict:
+def add_owner_trait(section: str, text: str, scope: str = "personal") -> dict:
     prof = current()
     if not prof or section not in SECTIONS:
         raise ValueError("Άγνωστη ενότητα")
     n = len(prof[section]) + 1
     tid = f"{PREFIX[section]}o{n}"
     key = "rule" if section == "decision_rules" else "text"
-    trait = {"id": tid, key: text, "evidence": [], "owner_verified": True, "confidence": 1.0}
+    trait = {"id": tid, key: text, "evidence": [], "owner_verified": True, "confidence": 1.0, "scope": scope}
     if section == "decision_rules":
         trait.update({"when": "ορίστηκε από τον κάτοχο", "prefers": [w.lower() for w in KW_RE.findall(text)][:8], "avoids": []})
     prof[section].append(trait)

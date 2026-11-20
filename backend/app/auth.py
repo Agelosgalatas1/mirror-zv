@@ -11,7 +11,7 @@ import time
 from fastapi import HTTPException, Request
 
 from . import db
-from .context import CURRENT_PERSON
+from .context import CURRENT_PERSON, CURRENT_VIEWER
 from .ingest import pipeline
 
 SESSION_TTL = 7 * 24 * 3600
@@ -46,6 +46,7 @@ async def current_user(request: Request) -> dict:
     if not row:
         raise HTTPException(401, "Χρειάζεται σύνδεση")
     CURRENT_PERSON.set(row["id"])
+    CURRENT_VIEWER.set(row["id"])
     return row
 
 

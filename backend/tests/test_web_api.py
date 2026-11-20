@@ -1,3 +1,7 @@
+import pytest
+
+pytestmark = pytest.mark.usefixtures("published_company_rules")
+
 """The API of the MIRROR web app: cookie sessions, upward-only access, conversations, self-test."""
 from fastapi.testclient import TestClient
 

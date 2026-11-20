@@ -10,6 +10,8 @@ from contextlib import contextmanager
 from contextvars import ContextVar
 from typing import Iterator
 
+CURRENT_VIEWER: ContextVar[str | None] = ContextVar("current_viewer", default=None)
+
 CURRENT_PERSON: ContextVar[str] = ContextVar("current_person", default="ceo")
 
 

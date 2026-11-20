@@ -11,7 +11,7 @@ import re
 import time
 from typing import Any
 
-from . import db, prompts
+from . import db, prompts, sharing
 from .ingest.pipeline import get_owner
 from .llm import LLM_CLIENT, LLMUnavailable
 from .context import pid
@@ -74,6 +74,8 @@ def _query_vec(text: str):
 
 
 def memories(query: str, k: int = 8) -> list[Hit]:
+    if sharing.restricted():
+        return []
     where = (lambda it: it.get("id") not in EXCLUDE) if EXCLUDE else None
     return INDEX.search(query, k=k, query_vec=_query_vec(query), where=where)
 
@@ -91,6 +93,8 @@ def format_memories(hits: list[Hit]) -> str:
 
 
 def exemplars(channel: str, query: str, n: int = 4) -> list[dict]:
+    if sharing.restricted():
+        return []
     hits = INDEX.search(query, k=n, where=lambda it: bool(it.get("is_owner")) and it.get("channel") == channel
                         and it.get("id") not in EXCLUDE)
     seen = {h.item_id for h in hits}
@@ -298,6 +302,8 @@ def _score_traits(prof: dict, question: str) -> list[tuple[float, dict]]:
 
 def _evidence_quote(t: dict, question: str) -> tuple[str, dict] | None:
     """The sentence from the trait's evidence that best supports it, with its source item."""
+    if sharing.restricted() or t.get('inherited_from'):
+        return None
     best = None
     for iid in t.get("evidence", [])[:4]:
         it = db.one("SELECT * FROM items WHERE id=?", (iid,))
@@ -382,6 +388,11 @@ def _offline_ask(prof: dict, question: str, hits: list[Hit], channel: str, histo
             mem = [_hit_view(Hit(it["id"] + ".0", it["id"], it["source_id"], it["text"], 1.0, it), "M1")]
             return reply(ans, [t], round(min(0.9, t.get("confidence") or 0.7), 2),
                          why="Ζήτησες το γιατί: σου δείχνω το δικό μου μήνυμα που το αποδεικνύει.", mems=mem)
+
+        if sharing.restricted() or t.get('inherited_from'):
+            return reply('Γιατί αυτός είναι ο δημοσιευμένος εταιρικός κανόνας: ' + _say(t), [t],
+                         min(0.9, t.get('confidence') or 0.7),
+                         why='Παραπέμπω στον εγκεκριμένο κανόνα, χωρίς τις ιδιωτικές πηγές του κατόχου.', mems=[])
 
     # 3. follow-up: "and what else?" -> next best trait for the previous question
     if MORE_RE.search(q) and n_raw <= 4 and last_user:
@@ -550,6 +561,8 @@ def _readdress(text: str, old: str | None, incoming: str) -> str:
 
 def _nearest_reply(incoming: str, channel: str) -> tuple[dict | None, float]:
     """The owner's own past reply to the most similar incoming message (nearest-neighbour)."""
+    if sharing.restricted():
+        return None, 0.0
     rows = db.query("SELECT i.* FROM items i JOIN sources s ON s.id=i.source_id WHERE s.consent=1 AND i.is_owner=1 "
                     "AND s.person_id=?", (pid(),))
     best, best_score = None, 0.0

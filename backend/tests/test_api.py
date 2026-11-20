@@ -1,3 +1,7 @@
+import pytest
+
+pytestmark = pytest.mark.usefixtures("published_company_rules")
+
 import time
 
 from fastapi.testclient import TestClient
@@ -57,7 +61,7 @@ def test_managers_inherit_ceo_company_rules():
         inherited = {r["id"] for r in prof["inherited"]["decision_rules"]}
         with as_person("ceo"):
             ceo_rules = profile.current()["decision_rules"]
-        company = {f"ceo.{r['id']}" for r in ceo_rules if r.get("scope") != "personal"}
+        company = {f"ceo.{r['id']}" for r in ceo_rules if r.get("scope") == "company"}
         personal = {f"ceo.{r['id']}" for r in ceo_rules if r.get("scope") == "personal"}
         assert company and company <= inherited and not (personal & inherited)
         assert all(not r["id"].startswith("ceo.") for r in prof["decision_rules"])
@@ -118,7 +122,8 @@ def test_upload_and_forget_own_source_and_rebuild():
         assert j["status"] == "done"
         res = c.delete(f"/api/sources/{r['source_id']}", headers=hs).json()
         assert res["deleted_items"]
-        c.post("/api/reset-demo", headers=hs)
+        hc = login(c, CEO)
+        assert c.post("/api/reset-demo", headers=hc, json={"confirmation":"RESET_DEMO"}).status_code == 200
 
 
 def test_ceo_evaluation_beats_baseline_offline():
@@ -148,19 +153,12 @@ def test_manager_evaluation_uses_held_out_examples():
         assert s["decision_accuracy"] > s["baseline_decision_accuracy"]
 
 
-def test_manager_can_run_ceo_evaluation_but_not_other_managers():
+def test_evaluation_is_owner_only():
     with TestClient(app) as c:
         hs = login(c, SALES)
         assert c.post("/api/eval/run?target=finance", headers=hs).status_code == 403
-        job = c.post("/api/eval/run?target=ceo", headers=hs).json()
-        for _ in range(100):
-            j = c.get(f"/api/jobs/{job['id']}", headers=hs).json()
-            if j["status"] != "running":
-                break
-            time.sleep(0.1)
-        s = j["result"]["summary"]
-        assert j["status"] == "done" and s["decision_accuracy"] > s["baseline_decision_accuracy"]
-        assert c.get("/api/eval/latest?target=ceo", headers=hs).status_code == 200
+        assert c.post("/api/eval/run?target=ceo", headers=hs).status_code == 403
+        assert c.get("/api/eval/latest?target=ceo", headers=hs).status_code == 403
 
 
 def test_saved_conversations_are_private_and_keep_context():
@@ -173,7 +171,8 @@ def test_saved_conversations_are_private_and_keep_context():
         # "why?" uses the history stored on the server, not sent by the browser
         why = c.post("/api/twin/ask", headers=hs, json={"question": "γιατί;", "target": "ceo",
                                                         "conversation_id": conv["id"]}).json()
-        assert "Είχα γράψει" in why["answer"]
+        assert why['traits'] and not why['memories']
+        assert 'δημοσιευμένος' in why['answer']
         assert len(c.get(f"/api/conversations/{conv['id']}", headers=hs).json()["messages"]) == 4
         assert c.get(f"/api/conversations/{conv['id']}", headers=hf).status_code == 404
         assert c.post("/api/twin/ask", headers=hs, json={"question": "x", "target": "sales",

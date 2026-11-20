@@ -19,8 +19,8 @@ from fastapi.responses import FileResponse, JSONResponse, Response
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from pydantic import BaseModel, Field
 
-from . import db, evaluation, jobs, mirror_api, profile, twin, voice
-from .auth import COOKIE, SESSION_TTL, allowed_targets, check_target, current_user, public_person, session_token
+from . import db, evaluation, jobs, mirror_api, profile, twin, voice, sharing
+from .auth import COOKIE, SESSION_TTL, allowed_targets, check_target, current_user, public_person, session_token, has_ai
 from .config import settings
 from .context import CURRENT_PERSON, as_person, pid
 from .ingest import pipeline
@@ -40,9 +40,7 @@ def _ensure_profile() -> None:
     latest = profile.latest()
     if latest and latest["meta"].get("method") in ("snapshot", "heuristic") \
             and latest["meta"].get("snapshot_hash") != profile.snapshot_hash():
-        snap = profile.load_snapshot()  # the shipped snapshot changed (new version of the app)
-        if snap:
-            profile.save_version(snap, "snapshot", snap["meta"]["note"])
+        # Never replace an existing persona just because a bundled snapshot changed.
         return
     if not latest and db.one("SELECT i.id FROM items i JOIN sources s ON s.id=i.source_id WHERE s.person_id=? LIMIT 1",
                              (pid(),)):
@@ -68,18 +66,14 @@ def bootstrap() -> None:
     fingerprint = demo_fingerprint()
     seeded = db.one("SELECT id FROM persons LIMIT 1")
     if settings.auto_seed and seeded and db.get_setting("demo_fingerprint", None) != fingerprint:
-        log.info("The shipped demo data changed: re-seeding")
-        db.reset_all()
-        db.execute("DELETE FROM sessions")
-        db.execute("DELETE FROM persons")
-        seeded = None
+        # A code/data update is never authority to erase a populated installation.
+        log.warning("Demo files changed; preserving existing data, profiles and sessions. "
+                    "Use the explicit, backed-up CEO reset only if a reset is intended.")
     if settings.auto_seed and not seeded:
         log.info("Seeding demo organisation from %s", settings.demo_dir)
         pipeline.ingest_demo(settings.demo_dir)
         db.set_setting("demo_fingerprint", fingerprint)
-    else:
-        for p in pipeline.load_org(settings.demo_dir).get("persons", []):
-            pipeline.upsert_person(p)  # keep people / logins in sync with the shipped org file
+    # Existing identities/passwords also remain owned by the installed database.
     for row in db.query("SELECT id FROM persons"):
         with as_person(row["id"]):
             index_for(row["id"]).rebuild()
@@ -268,22 +262,32 @@ def forget(sid: str):
 def get_item(iid: str, user: dict = Depends(current_user)):
     it = db.one("SELECT i.*, s.name AS source_name, s.person_id AS person_id FROM items i "
                 "JOIN sources s ON s.id=i.source_id WHERE i.id=?", (iid,))
-    # evidence is visible for your own data and for the people above you (inherited rules cite their data)
-    if not it or it["person_id"] not in allowed_targets(user["id"]):
+    # Raw evidence belongs only to its owner; shared rules contain no private item links.
+    if not it or it["person_id"] != user["id"]:
         raise HTTPException(404, "Δεν βρέθηκε (ίσως έχει διαγραφεί)")
     return it
 
 
+class ResetDemoIn(BaseModel):
+    confirmation: str
+
+
 @api.post("/reset-demo")
-def reset_demo():
+def reset_demo(body: ResetDemoIn, user: dict = Depends(current_user)):
+    if user.get("reports_to") or not has_ai(user["id"]):
+        raise HTTPException(403, "Η επαναφορά demo επιτρέπεται μόνο στην CEO.")
+    if body.confirmation != "RESET_DEMO":
+        raise HTTPException(400, "Απαιτείται ρητή επιβεβαίωση RESET_DEMO.")
+    backup_name = db.backup()
     db.reset_all()
     pipeline.ingest_demo(settings.demo_dir)
+    db.set_setting('demo_fingerprint', demo_fingerprint())
     for row in db.query("SELECT id FROM persons"):
         with as_person(row["id"]):
             index_for(row["id"]).rebuild()
             _ensure_profile()
-    db.audit("owner", "reset_demo")
-    return {"ok": True}
+    db.audit("owner", "reset_demo", backup=backup_name)
+    return {"ok": True, "backup": backup_name}
 
 
 # ------------------------------------------------------------------ persona model
@@ -294,6 +298,8 @@ def get_profile(target: str | None = None, user: dict = Depends(current_user)):
         prof = profile.current()
         if not prof:
             raise HTTPException(404, "Δεν υπάρχει ακόμα προφίλ")
+        if pid() != user['id']:
+            prof = sharing.public_profile(prof, pid())
         prof = profile.with_inheritance(prof)
         prof["read_only"] = pid() != user["id"]
         return prof
@@ -347,14 +353,31 @@ def edit_trait(tid: str, body: TraitEdit):
         raise HTTPException(404, "Άγνωστο χαρακτηριστικό") from exc
 
 
+class PublicationIn(BaseModel):
+    published: bool
+    content_hash: str | None = Field(default=None, max_length=64)
+
+
+@api.post("/profile/traits/{tid}/publication")
+def publish_trait(tid: str, body: PublicationIn, user: dict = Depends(current_user)):
+    try:
+        sharing.set_publication(user['id'], tid, body.published, body.content_hash)
+    except KeyError as exc:
+        raise HTTPException(404, "Άγνωστος εταιρικός κανόνας.") from exc
+    except (PermissionError, ValueError) as exc:
+        raise HTTPException(400, str(exc)) from exc
+    return {'rules': sharing.review_rules(user['id'])}
+
+
 class TraitAdd(BaseModel):
+    scope: Literal["personal", "company"] = "personal"
     section: Literal["values", "knowledge", "preferences", "decision_rules"]
     text: str = Field(min_length=3, max_length=500)
 
 
 @api.post("/profile/traits")
 def add_trait(body: TraitAdd):
-    return profile.with_inheritance(profile.add_owner_trait(body.section, body.text))
+    return profile.with_inheritance(profile.add_owner_trait(body.section, body.text, body.scope))
 
 
 # ------------------------------------------------------------------ twin (own, or someone you report to)
@@ -386,6 +409,7 @@ def _own_conversation(cid: int, user: dict) -> dict:
     conv = db.one("SELECT * FROM conversations WHERE id=? AND user_id=?", (cid, user["id"]))
     if not conv:
         raise HTTPException(404, "Η συνομιλία δεν βρέθηκε")
+    _check_target(user, conv['target'])
     return conv
 
 
@@ -400,14 +424,19 @@ def ask(body: AskIn, user: dict = Depends(current_user)):
             raise HTTPException(400, "Η συνομιλία ανήκει σε άλλο twin")
         rows = db.query("SELECT role, text, payload FROM messages WHERE conversation_id=? ORDER BY id DESC LIMIT 8",
                         (conv["id"],))
+        rows = sharing.visible_messages(rows, user['id'], target)
         history = [{"role": r["role"], "text": r["text"],
                     "traits": [t["id"] for t in (r["payload"] or {}).get("traits", [])]} for r in reversed(rows)]
+    stamp = sharing.access_fingerprint(user['id'], target)
     with as_person(target):
         res = twin.ask(body.question, body.channel, history=history)
+    if stamp != sharing.access_fingerprint(user['id'], target):
+        raise HTTPException(409, "Οι δημοσιευμένοι κανόνες άλλαξαν. Ξαναστείλε την ερώτηση.")
+    res['access_fingerprint'] = stamp
     if conv:
         now = time.time()
         db.execute("INSERT INTO messages(conversation_id, role, text, payload, created_at) VALUES(?,?,?,?,?)",
-                   (conv["id"], "user", body.question, "{}", now))
+                   (conv["id"], "user", body.question, db.dumps({"access_fingerprint": stamp}), now))
         res["message_id"] = db.execute(
             "INSERT INTO messages(conversation_id, role, text, payload, created_at) VALUES(?,?,?,?,?)",
             (conv["id"], "twin", res.get("answer", ""), db.dumps(res), now + 0.001))
@@ -445,6 +474,7 @@ def get_conversation(cid: int, user: dict = Depends(current_user)):
     conv = _own_conversation(cid, user)
     conv["messages"] = db.query("SELECT id, role, text, payload, created_at FROM messages WHERE conversation_id=? "
                                 "ORDER BY id", (cid,))
+    conv['messages'] = sharing.visible_messages(conv['messages'], user['id'], conv['target'])
     return conv
 
 
@@ -462,6 +492,7 @@ def rename_conversation(cid: int, body: RenameIn, user: dict = Depends(current_u
 @api.delete("/conversations/{cid}")
 def delete_conversation(cid: int, user: dict = Depends(current_user)):
     _own_conversation(cid, user)
+    db.execute("DELETE FROM voice_turns WHERE conversation_id=? AND user_id=?", (cid, user['id']))
     db.execute("DELETE FROM messages WHERE conversation_id=?", (cid,))
     db.execute("DELETE FROM conversations WHERE id=?", (cid,))
     return {"ok": True}
@@ -588,12 +619,16 @@ def privacy_report():
 
 @api.post("/eval/run")
 def run_eval(target: str | None = None, user: dict = Depends(current_user)):
+    if target and target != user["id"]:
+        raise HTTPException(403, "Η αξιολόγηση περιέχει ιδιωτικά στοιχεία του κατόχου.")
     with as_person(_check_target(user, target)):
         return jobs.start("eval", evaluation.run)
 
 
 @api.get("/eval/latest")
 def latest_eval(target: str | None = None, user: dict = Depends(current_user)):
+    if target and target != user["id"]:
+        raise HTTPException(403, "Η αξιολόγηση περιέχει ιδιωτικά στοιχεία του κατόχου.")
     with as_person(_check_target(user, target)):
         r = evaluation.latest_run()
     if not r:
@@ -604,13 +639,15 @@ def latest_eval(target: str | None = None, user: dict = Depends(current_user)):
 @api.get("/jobs/{jid}")
 def job(jid: str, user: dict = Depends(current_user)):
     j = jobs.get(jid)
-    if not j or j.get("person") not in allowed_targets(user["id"]):
+    if not j or j.get("person") != user["id"]:
         raise HTTPException(404, "Άγνωστη εργασία")
     return j
 
 
 @api.get("/blind")
 def blind(target: str | None = None, user: dict = Depends(current_user)):
+    if target and target != user["id"]:
+        raise HTTPException(403, "Η αξιολόγηση περιέχει ιδιωτικά στοιχεία του κατόχου.")
     with as_person(_check_target(user, target)):
         try:
             return evaluation.blind_round()
@@ -626,6 +663,8 @@ class VoteIn(BaseModel):
 
 @api.post("/blind")
 def blind_vote(body: VoteIn, user: dict = Depends(current_user)):
+    if body.target and body.target != user['id']:
+        raise HTTPException(403, "Η αξιολόγηση ανήκει στον κάτοχο.")
     with as_person(_check_target(user, body.target)):
         try:
             return evaluation.blind_vote(body.token, body.pick)
@@ -635,6 +674,8 @@ def blind_vote(body: VoteIn, user: dict = Depends(current_user)):
 
 @api.get("/blind/stats")
 def blind_stats(target: str | None = None, user: dict = Depends(current_user)):
+    if target and target != user["id"]:
+        raise HTTPException(403, "Η αξιολόγηση περιέχει ιδιωτικά στοιχεία του κατόχου.")
     with as_person(_check_target(user, target)):
         return evaluation.blind_stats()
 

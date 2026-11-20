@@ -209,6 +209,8 @@ def delete_source(source_id: str) -> dict:
     if not src:
         raise KeyError(source_id)
     item_ids = [r["id"] for r in db.query("SELECT id FROM items WHERE source_id=?", (source_id,))]
+    from .. import sharing
+    sharing.invalidate_source(pid(), source_id)
     with db.tx() as conn:
         conn.execute("DELETE FROM chunks WHERE source_id=?", (source_id,))
         conn.execute("DELETE FROM items WHERE source_id=?", (source_id,))
@@ -219,6 +221,9 @@ def delete_source(source_id: str) -> dict:
 
 
 def set_consent(source_id: str, consent: bool) -> None:
+    if not consent:
+        from .. import sharing
+        sharing.invalidate_source(pid(), source_id)
     db.execute("UPDATE sources SET consent=? WHERE id=? AND person_id=?", (int(consent), source_id, pid()))
     db.audit("owner", "consent", source=source_id, consent=consent)
     INDEX.rebuild()

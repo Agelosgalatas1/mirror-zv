@@ -498,3 +498,13 @@ button.me .who small{display:block;color:var(--muted);font-size:11.5px}
 .chat-head>div.mode-switch{flex:0 0 auto;min-width:auto;margin-left:auto}
 .chat-shell>.avatar-panel{grid-row:1}
 .chat-shell>.chat{grid-row:2}
+
+/* Publication is a full-content review, unlike compact self-test history cards. */
+.publication-review .self-test-event { flex-direction: column; align-items: flex-start; gap: .75rem; }
+.publication-review .self-test-event-copy { width: 100%; min-width: 0; }
+.publication-review .self-test-event-copy p,
+.publication-review .self-test-event-copy b {
+  display: block; overflow: visible; white-space: normal; text-overflow: clip;
+  -webkit-line-clamp: unset; max-height: none; overflow-wrap: anywhere;
+}
+.publication-review .self-test-event-copy b { font-size: .95rem; line-height: 1.5; }

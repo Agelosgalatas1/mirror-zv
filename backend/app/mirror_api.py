@@ -18,7 +18,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import Response
 from pydantic import BaseModel, Field
 
-from . import db, profile, twin, voice
+from . import db, profile, twin, voice, sharing
 from .auth import allowed_targets, current_user, has_ai
 from .context import as_person
 from .ingest import pipeline
@@ -145,12 +145,14 @@ def _conversation(user: dict, mid: str, cid: str) -> dict:
 
 
 def _thread_view(c: dict) -> dict:
-    last_q = db.one("SELECT text FROM messages WHERE conversation_id=? AND role='user' ORDER BY id DESC LIMIT 1", (c["id"],))
-    last_a = db.one("SELECT text FROM messages WHERE conversation_id=? AND role='twin' ORDER BY id DESC LIMIT 1", (c["id"],))
-    turns = db.one("SELECT count(*) n FROM messages WHERE conversation_id=? AND role='user'", (c["id"],))["n"]
+    rows = sharing.visible_messages(db.query('SELECT * FROM messages WHERE conversation_id=? ORDER BY id', (c['id'],)),
+                                    c['user_id'], c['target'])
+    last_q = next((r for r in reversed(rows) if r['role']=='user'), {})
+    last_a = next((r for r in reversed(rows) if r['role']=='twin'), {})
     return {"conversation_id": str(c["id"]), "title": c["title"], "created_at": iso(c["created_at"]),
-            "updated_at": iso(c["updated_at"]), "expires_at": None, "turns": turns,
-            "last_question": (last_q or {}).get("text", ""), "last_answer": (last_a or {}).get("text", "")}
+            "updated_at": iso(c["updated_at"]), "expires_at": None,
+            "turns": sum(r['role']=='user' for r in rows),
+            "last_question": last_q.get('text',''), "last_answer": last_a.get('text','')}
 
 
 class TitleIn(BaseModel):
@@ -181,6 +183,7 @@ def conversation(mid: str, cid: str, user: dict = Depends(current_user)):
     conv = _conversation(user, mid, cid)
     msgs = db.query("SELECT id, role, text, payload, created_at FROM messages WHERE conversation_id=? ORDER BY id",
                     (conv["id"],))
+    msgs = sharing.visible_messages(msgs, user['id'], mid)
     voiced = {r["message_id"]: r["id"] for r in db.query(
         "SELECT id, message_id FROM voice_turns WHERE user_id=? AND conversation_id=? AND state='READY' "
         "AND audio IS NOT NULL AND created_at>?", (user["id"], conv["id"], time.time() - VOICE_TTL))}
@@ -243,14 +246,19 @@ def answer_in_conversation(user: dict, mid: str, question: str, cid: str | None,
     if conv:
         rows = db.query("SELECT role, text, payload FROM messages WHERE conversation_id=? ORDER BY id DESC LIMIT 8",
                         (conv["id"],))
+        rows = sharing.visible_messages(rows, user['id'], mid)
         history = [{"role": r["role"], "text": r["text"],
                     "traits": [t["id"] for t in (r["payload"] or {}).get("traits", [])]} for r in reversed(rows)]
+    stamp = sharing.access_fingerprint(user['id'], mid)
     with as_person(mid):
         res = twin.ask(" ".join(question.split()), channel if channel in CHANNELS else "chat_team", history=history)
+    if stamp != sharing.access_fingerprint(user['id'], mid):
+        raise HTTPException(409, "Οι δημοσιευμένοι κανόνες άλλαξαν. Ξαναστείλε την ερώτηση.")
+    res['access_fingerprint'] = stamp
     if conv:
         now = time.time()
         db.execute("INSERT INTO messages(conversation_id, role, text, payload, created_at) VALUES(?,?,?,?,?)",
-                   (conv["id"], "user", question.strip(), "{}", now))
+                   (conv["id"], "user", question.strip(), db.dumps({"access_fingerprint": stamp}), now))
         res["message_id"] = db.execute(
             "INSERT INTO messages(conversation_id, role, text, payload, created_at) VALUES(?,?,?,?,?)",
             (conv["id"], "twin", res.get("answer", ""), db.dumps(res), now + 0.001))
@@ -267,11 +275,17 @@ def ask(mid: str, body: AskIn, user: dict = Depends(current_user)):
 
 
 def _speak_into(turn_id: str, answer: str, mid: str) -> bool:
+    row = db.one('SELECT * FROM voice_turns WHERE id=?', (turn_id,))
+    def check():
+        if not row or row['access_fingerprint'] != sharing.access_fingerprint(row['user_id'], mid):
+            raise HTTPException(403, "Η έγκριση των κανόνων άλλαξε. Ξεκίνα νέα απάντηση.")
+    check()
     try:
         wav = voice.speak(answer, mid)
     except voice.VoiceError:
         db.execute("UPDATE voice_turns SET state='TEXT_ONLY', answer=? WHERE id=?", (answer, turn_id))
         return False
+    check()
     db.execute("UPDATE voice_turns SET state='READY', answer=?, audio=? WHERE id=?", (answer, wav, turn_id))
     return True
 
@@ -281,9 +295,9 @@ def spoken_ask(mid: str, body: AskIn, user: dict = Depends(current_user)):
     guard(user, mid)
     res = answer_in_conversation(user, mid, body.question, body.conversation_id, body.channel)
     turn_id = uuid.uuid4().hex
-    db.execute("INSERT INTO voice_turns(id, user_id, target, conversation_id, message_id, transcript, state, created_at) "
-               "VALUES(?,?,?,?,?,?,?,?)", (turn_id, user["id"], mid, int(res["conversation_id"]) if res.get(
-                   "conversation_id") else None, res.get("message_id"), body.question, "PENDING", time.time()))
+    db.execute("INSERT INTO voice_turns(id, user_id, target, conversation_id, message_id, transcript, state, created_at, access_fingerprint) "
+               "VALUES(?,?,?,?,?,?,?,?,?)", (turn_id, user["id"], mid, int(res["conversation_id"]) if res.get(
+                   "conversation_id") else None, res.get("message_id"), body.question, "PENDING", time.time(), res['access_fingerprint']))
     has_audio = _speak_into(turn_id, res["answer"], mid)
     return {"answer": res["answer"], "turn_id": turn_id, "has_audio": has_audio,
             "conversation_id": res.get("conversation_id"), "explain": explain(res)}
@@ -319,6 +333,10 @@ def _turn(user: dict, tid: str) -> dict:
     if not row:
         raise HTTPException(404, "Η φωνητική απάντηση δεν βρέθηκε ή έληξε.")
     guard(user, row["target"])
+    if row['conversation_id'] is not None:
+        _conversation(user, row['target'], str(row['conversation_id']))
+    if user['id'] != row['target'] and row['access_fingerprint'] != sharing.access_fingerprint(user['id'], row['target']):
+        raise HTTPException(403, "Οι κανόνες άλλαξαν ή η εγγραφή προέρχεται από παλιότερη πρόσβαση.")
     return row
 
 
@@ -333,9 +351,9 @@ async def transcribe(mid: str, request: Request, conversation_id: str | None = N
     except voice.VoiceError as exc:
         raise HTTPException(502, str(exc)) from exc
     turn_id = uuid.uuid4().hex
-    db.execute("INSERT INTO voice_turns(id, user_id, target, conversation_id, transcript, state, created_at) "
-               "VALUES(?,?,?,?,?,?,?)", (turn_id, user["id"], mid, conv["id"] if conv else None, text,
-                                         "TRANSCRIBED", time.time()))
+    db.execute("INSERT INTO voice_turns(id, user_id, target, conversation_id, transcript, state, created_at, access_fingerprint) "
+               "VALUES(?,?,?,?,?,?,?,?)", (turn_id, user["id"], mid, conv["id"] if conv else None, text,
+                                         "TRANSCRIBED", time.time(), sharing.access_fingerprint(user['id'], mid)))
     return {"turn_id": turn_id, "transcript": text}
 
 
@@ -430,6 +448,7 @@ def self_test_state(user: dict) -> dict:
         raise HTTPException(409, "Δεν έχεις δικό σου AI αντίγραφο για self-test.")
     with as_person(user["id"]):
         prof = _own_profile()
+    company_rules = sharing.review_rules(user['id'])
     events = db.query("SELECT * FROM self_test_events WHERE person_id=? ORDER BY id DESC LIMIT 60", (user["id"],))
     topics = []
     for sec, name in TOPICS.items():
@@ -448,7 +467,7 @@ def self_test_state(user: dict) -> dict:
     custom = list({e["question"]: {"question": e["question"], "topic": e["topic"]}
                    for e in reversed(events) if e["question_source"] == "custom"}.values())[-10:]
     me = pipeline.owner_dict(user["id"])
-    return {"mirror": {"id": user["id"], "name": me["name"]}, "topics": topics, "next_topic": nxt,
+    return {"company_rules": company_rules, "mirror": {"id": user["id"], "name": me["name"]}, "topics": topics, "next_topic": nxt,
             "custom_questions": custom,
             "events": [{"event_id": e["id"], "topic": e["topic"], "question": e["question"], "feedback": e["feedback"],
                         "correction": e["correction"], "undone_at": iso(e["undone_at"])} for e in events[:12]]}

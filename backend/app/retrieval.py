@@ -16,7 +16,7 @@ from typing import Callable
 
 import numpy as np
 
-from . import db
+from . import db, sharing
 from .context import pid
 
 TOKEN_RE = re.compile(r"[\w]+", re.UNICODE)
@@ -133,6 +133,8 @@ class MemoryIndex:
         where: Callable[[dict], bool] | None = None,
         query_vec: np.ndarray | None = None,
     ) -> list[Hit]:
+        if sharing.restricted(self.person):
+            return []
         with self._lock:
             if not self.chunks:
                 return []
