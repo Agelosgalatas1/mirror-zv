@@ -131,6 +131,9 @@ def _fold(s: str) -> str:
     return "".join(c for c in s if unicodedata.category(c) != "Mn")
 
 
+GREEK_CREDIT_CARD = re.compile(r"\bπιστωτικ(?:η|ης|ες|ων)\s+(?:(?:σου|μου|του|της|μας|σας|τους)\s+)?καρτ")
+
+
 # Επεξήγηση: Εντοπίζει ερωτήσεις που εμπίπτουν στα προστατευμένα θέματα.
 def check_boundaries(text: str, boundaries: list[dict]) -> dict | None:
     folded = _fold(text)
@@ -138,6 +141,12 @@ def check_boundaries(text: str, boundaries: list[dict]) -> dict | None:
         if not b.get("enabled", True):
             continue
         for kw in b.get("keywords", []):
-            if _fold(kw) in folded:
+            term = _fold(kw)
+            # The legacy Greek finance stem also matches ordinary business credit policy.
+            if b["id"] == "finance" and term == "πιστωτικ":
+                matched = bool(GREEK_CREDIT_CARD.search(folded))
+            else:
+                matched = term in folded
+            if matched:
                 return {"id": b["id"], "label": b["label"], "matched": kw}
     return None

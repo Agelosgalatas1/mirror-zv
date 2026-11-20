@@ -150,7 +150,7 @@ async function start(enterChat = false) {
   state.view = target ? "chat" : "home";
   render();
   if (target) await openMirror(target, true);
-  else if (view === "chat") unavailableChat(mid);
+  else if (view === "chat") unavailableChat();
 }
 async function loadHierarchy(session) {
   let people = [], failed = false;
@@ -168,12 +168,11 @@ async function retryHierarchy(button) {
   paintSidebar();
   if (state.view === "home") paintMain(); else paintHead();
 }
-/* The address names a Mirror this user cannot chat with (their own, another line, unknown): never keep
+/* The address names a Mirror this user cannot chat with: never keep
    showing a different conversation under that address; return to the team and say why. */
-function unavailableChat(mid) {
-  const own = state.people.some(p => p.is_me && p.mirror_id === mid);
+function unavailableChat() {
   goHome();
-  toast(own ? "Αυτό είναι το δικό σου AI· μπορείς να μιλήσεις με το AI άλλων ανθρώπων της ομάδας." : "Δεν έχεις πρόσβαση σε αυτό το AI.", !own);
+  toast("Δεν έχεις πρόσβαση σε αυτό το AI.", true);
 }
 function goHome() { invalidateConversation(); state.view = "home"; location.hash = "#/"; closeNav(); paintMain(); paintSidebar(); }
 window.addEventListener("hashchange", () => {
@@ -181,7 +180,7 @@ window.addEventListener("hashchange", () => {
   const [, view, mid] = location.hash.split("/");
   if (view === "chat") {
     const m = state.session.mirrors.find(x => x.id === mid);
-    if (!m) { unavailableChat(mid); return; }
+    if (!m) { unavailableChat(); return; }
     if (state.view !== "chat" || state.mirror?.id !== m.id) openMirror(m);
   }
   else if (state.view !== "home") goHome();
@@ -336,9 +335,12 @@ function paintMain() {
 function paintSidebar() {
   const people = $("#people"), threads = $("#threads");
   if (!people) return;
-  fill(people, state.session.mirrors.map(m => { const p = personFor(m);
+  fill(people, state.session.mirrors.map(m => {
+    const p = personFor(m);
+    const own = m.id === state.session.user.employee_id;
     return h("button", { class: "person", "aria-current": String(state.view === "chat" && state.mirror?.id === m.id), onclick: () => state.mirror?.id === m.id && state.view === "chat" ? newChat() : openMirror(m) },
-      avatar(p, "", true), h("span", {}, h("b", {}, p.name), h("small", {}, p.job_title))); }));
+      avatar(p, "", true), h("span", {}, h("b", {}, p.name), h("small", {}, own ? "Το δικό σου Mirror" : p.job_title)));
+  }));
   paintThreads();
 }
 /* History: grouped by day, with the owner's last question as a preview, searchable and renamable. */
@@ -763,7 +765,7 @@ function layoutTree(people) {
 const DEPARTMENTS = { executive: "Διοίκηση", sales: "Πωλήσεις", finance: "Οικονομικά" };
 const RELATIONS = { manager: "Ο άμεσος προϊστάμενός σου", above: "Ανώτερος στη γραμμή αναφοράς σου" };
 const REASONS = {
-  self: "Εσύ · πάτησε για self-test και επαλήθευση",
+  self: "Πάτησε για self-test. Για συνομιλία, διάλεξε το δικό σου Mirror από το μενού.",
   self_no_ai: "Εσύ · δεν έχεις ακόμα δικό σου AI αντίγραφο· μιλάς με το AI των προϊσταμένων σου",
   no_ai: "Δεν έχει AI αντίγραφο",
   below: "Αναφέρεται σε σένα · η συνομιλία γίνεται μόνο προς τα πάνω",
@@ -941,7 +943,7 @@ function talkTo(p) {
 }
 function personCard(p, extraClass = "") {
   const me = p.is_me ?? p.id === state.session.user.employee_id;
-  const note = personNote({ ...p, reason: me ? (p.mirror_id ? "self" : "self_no_ai") : p.reason });
+  const note = me ? REASONS[p.mirror_id ? "self" : "self_no_ai"] : personNote(p);
   const silent = silentEmployeeAccess(p);
   const pill = me ? (p.mirror_id ? h("span", { class: "pill go" }, icon(I.chat, 13), "Self-test") : null)
     : p.can_chat ? h("span", { class: "pill go" }, icon(I.chat, 13), "Συνομίλησε")

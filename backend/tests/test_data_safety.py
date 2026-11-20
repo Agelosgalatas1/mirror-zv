@@ -60,7 +60,7 @@ def inherited(c, h):
 
 
 @pytest.mark.parametrize('edit_profile', [False, True])
-def test_startup_preserves_data_sessions_identity_and_profiles(monkeypatch, edit_profile):
+def test_startup_preserves_data_sessions_identity_and_profiles(monkeypatch, tmp_path, edit_profile):
     with TestClient(app) as c:
         hc=login(c)
         uploaded=c.post('/api/sources',headers=hc,files={'file':('private.md',b'# Private\nKEEP_UPLOADED_MARKER','text/markdown')}).json()
@@ -73,13 +73,22 @@ def test_startup_preserves_data_sessions_identity_and_profiles(monkeypatch, edit
         monkeypatch.setattr('app.main.demo_fingerprint',lambda:'newer-bundle')
         monkeypatch.setattr(db,'reset_all',Mock(side_effect=AssertionError('Automatic reset forbidden')))
         monkeypatch.setattr('app.main.pipeline.ingest_demo',Mock(side_effect=AssertionError('No automatic overwrite')))
-        monkeypatch.setattr(profile,'snapshot_hash',lambda raw=None:'NEW_SNAPSHOT')
-        monkeypatch.setattr(profile,'load_snapshot',Mock(side_effect=AssertionError('No automatic snapshot overwrite')))
+        snapshot_dir = tmp_path / 'snapshots'
+        snapshot_dir.mkdir()
+        source = settings.snapshot_dir / 'ceo.json'
+        snapshot = json.loads(source.read_text())
+        snapshot['summary'] += ' Updated shipped snapshot.'
+        (snapshot_dir / source.name).write_text(json.dumps(snapshot, ensure_ascii=False))
+        monkeypatch.setattr(profile, 'settings', dataclasses.replace(settings, snapshot_dir=snapshot_dir))
         bootstrap()
         assert db.one('SELECT id FROM sources WHERE id=?',(uploaded['source_id'],))
         assert db.one('SELECT id FROM conversations WHERE id=?',(cid,))
         assert db.one("SELECT * FROM persons WHERE id='ceo'")['pw_hash']=='CUSTOM_HASH'
-        assert profile.latest()==before
+        if edit_profile:
+            assert profile.latest() == before
+        else:
+            assert profile.latest()['summary'] == snapshot['summary']
+            assert db.one('SELECT id FROM profile_versions WHERE id=?', (before['version'],))
         assert c.get('/api/status',headers=hc).status_code==200
 
 

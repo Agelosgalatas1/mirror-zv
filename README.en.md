@@ -115,7 +115,7 @@ Solid arrows show reporting lines. Dashed arrows show inheritance of company-sco
 - The **CEO and two managers have their own AI Mirror and memory**; a manager cannot see the other manager’s data. Employees do not have their own AI copy yet.
 - **Inheritance:** a manager's Mirror inherits only the CEO's company values and rules that she explicitly approves and publishes. Published CEO rules take precedence over local rules; her private memories and personal rules are not inherited.
 - In practice, only **company-scope values and decision rules** pass down the reporting chain. Traits marked `personal` stay with their owner. Inherited items are read-only in a manager profile, keep their source/evidence, and are placed before that manager’s own rules so company policy wins a conflict.
-- **Upward-only access, enforced on the server:** employees can chat with their manager’s Mirror and the CEO’s; managers can chat with the CEO’s Mirror, never sideways or downward. The CEO is at the top, so she runs the **self-test** on her own Mirror.
+- **Access to your own Mirror and your managers’ Mirrors:** the CEO and managers can chat with their own Mirror and run a **self-test**. Employees can chat with their manager’s Mirror and the CEO’s. Chats with managers’ Mirrors use the company rules and values approved for publication. The server enforces these permissions.
 
 ### Demo accounts and access
 
@@ -131,7 +131,7 @@ These credentials are for this synthetic demo only.
 
 Passwords are stored as PBKDF2 hashes. The session is an `HttpOnly`, `SameSite=Strict` cookie and every write also needs the `X-Mirror-Request` header (CSRF guard); API clients may use `Authorization: Bearer <token>`.
 
-**Data** (`python scripts/import_zv.py` finds a sibling `ZV/sources` folder, or pass its path → `backend/data/demo/<person>/`, 100% synthetic): per person 10 emails (.eml), Teams chats, notes, policies (SALE-DISC v1/v2, FIN-CREDIT v1/v2, FIN-PROC-03), memos, meeting minutes, call transcripts, the 2026 decision log, CRM/ERP workflow logs, draft-vs-final texts and two personality-seed emails. The shipped persona models (`backend/data/snapshot/`) were extracted from this data with `python -m tools.build_snapshots`, so the demo also works without a key.
+Run `python scripts/import_zv.py` to import `ZV/sources` into `backend/data/demo/<person>/`. The script finds a sibling ZV checkout, or you can pass the path explicitly. Each Mirror has 28 synthetic sources, including emails, Teams chats, notes, policies, memos, meeting minutes, call transcripts, decision and workflow logs, draft and final texts, and personality examples. The original ZV evaluation examples and `holdout.json` are stored in `eval/`, which the app skips when importing knowledge. The shipped profiles in `backend/data/snapshot/` let the demo work without an API key.
 
 ## From login to interactive use
 
@@ -168,6 +168,8 @@ The current Simli subscription supports **one active human-avatar session at a t
 ### 6. Check and correct your own Mirror
 
 Open **Self-test** from your own card in the pyramid. Choose a topic, write a question or ask AI to generate one. **Answer first**, then compare the Mirror's answer and mark whether it is correct. Add a correction when needed: it is saved as owner-verified knowledge and can be undone in the same window.
+
+Select **Το δικό σου Mirror** (Your own Mirror) in the sidebar to ask questions about your sources and use the knowledge you confirmed in **Self-test**.
 
 ### Demo note
 

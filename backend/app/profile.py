@@ -342,6 +342,8 @@ def latest() -> dict | None:
         return None
     prof = row["profile"]
     prof["version"] = row["id"]
+    # Older owner edits copied the original snapshot metadata into the new version.
+    prof.setdefault("meta", {})["method"] = row["method"]
     return prof
 
 

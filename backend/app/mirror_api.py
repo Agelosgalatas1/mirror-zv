@@ -2,8 +2,8 @@
 """The API of the MIRROR web app (the team's ZV frontend), on top of the MIRROR twin engine.
 
 The browser only ever sees conversations: knowledge, inheritance and access rules stay on the
-server. Access is upward only: a person chats with the AI of everyone they report to, and tests
-their own AI in the self-test. Spoken answers ("voice turns") keep the ElevenLabs audio on the
+server. A person can chat with their own AI and the AI of everyone they report to. The owner can
+also run a self-test on their AI. Spoken answers ("voice turns") keep the ElevenLabs audio on the
 server; the Simli avatar gets a short-lived token for one checked answer at a time.
 """
 from __future__ import annotations
@@ -54,8 +54,10 @@ def user_view(row: dict) -> dict:
 
 
 def chat_mirrors(user: dict) -> list[dict]:
-    """The Mirrors this user may chat with: everyone they report to (never their own, never sideways)."""
-    return [{"id": t, "title": pipeline.owner_dict(t)["name"]} for t in allowed_targets(user["id"]) if t != user["id"]]
+    """List the reporting chain first, then the owner's own Mirror if they have one."""
+    person = user["id"]
+    targets = sorted(allowed_targets(person), key=lambda target: target == person)
+    return [{"id": target, "title": pipeline.owner_dict(target)["name"]} for target in targets]
 
 
 def session_payload(user: dict) -> dict:
@@ -124,7 +126,7 @@ def hierarchy(user: dict = Depends(current_user)):
             rel = "other_line"
         can = r["id"] in allowed
         ai = has_ai(r["id"])
-        reason = None if can else "no_ai" if not ai else "self" if rel == "self" else \
+        reason = None if can else "no_ai" if not ai else \
             rel if rel in ("below", "other_line") else "not_permitted"
         v = user_view(r)
         out.append({"id": r["id"], "name": v["name"], "job_title": v["job_title"], "role_name": v["role_name"],

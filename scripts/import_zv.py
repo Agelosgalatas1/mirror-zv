@@ -6,8 +6,8 @@
 Writes backend/data/demo/{ceo,sales,finance}/ in formats the MIRROR pipeline ingests:
 emails (.eml) and notes/documents/transcripts (.md/.txt) are copied as they are; Teams exports
 become chat JSON; decision logs, workflow logs and draft/final pairs become readable Markdown.
-The 12 November 2026 "examples" files are NOT ingested: they are the held-out evaluation set
-(backend/data/demo/<id>/eval/holdout.json), so the twin never sees the answers it is tested on.
+The 12 November 2026 source examples are kept next to holdout.json in each person's eval folder.
+The application skips that folder when importing knowledge.
 All data is synthetic.
 """
 from __future__ import annotations
@@ -109,8 +109,16 @@ def import_person(src: Path, dst: Path) -> list[str]:
     if dst.exists():
         shutil.rmtree(dst)
     dst.mkdir(parents=True)
+    if saved_eval:
+        keep_eval.mkdir()
+        for name, data in saved_eval.items():
+            (keep_eval / name).write_bytes(data)
     for path in sorted(src.rglob("*")):
-        if not path.is_file() or path.name.startswith(".") or path.name in HELD_OUT:
+        if not path.is_file() or path.name.startswith("."):
+            continue
+        if path.name in HELD_OUT:
+            keep_eval.mkdir(exist_ok=True)
+            shutil.copyfile(path, keep_eval / path.name)
             continue
         rel = path.relative_to(src)
         folder = rel.parts[0] if len(rel.parts) > 1 else ""
@@ -140,10 +148,6 @@ def import_person(src: Path, dst: Path) -> list[str]:
         else:
             continue
         written.append(str(target.relative_to(dst)))
-    if saved_eval:
-        keep_eval.mkdir(exist_ok=True)
-        for name, data in saved_eval.items():
-            (keep_eval / name).write_bytes(data)
     return written
 
 
@@ -154,6 +158,9 @@ def main() -> None:
         # Find a sibling ZV checkout even when MIRROR is nested one folder deeper (as on the team's desktop).
         src = next((parent / "ZV" / "sources" for parent in ROOT.parents
                     if (parent / "ZV" / "sources").is_dir()), ROOT.parent / "ZV" / "sources")
+    missing = [str(src / person) for person in PEOPLE if not (src / person).is_dir()]
+    if missing:
+        sys.exit("Λείπουν οι φάκελοι πηγών: " + ", ".join(missing))
     for pid in PEOPLE:
         files = import_person(src / pid, OUT / pid)
         print(f"{pid}: {len(files)} αρχεία")

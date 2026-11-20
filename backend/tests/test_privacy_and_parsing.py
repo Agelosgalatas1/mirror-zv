@@ -37,6 +37,8 @@ def test_boundaries_match_greek_and_english():
     assert check_boundaries("What medication do you take?", DEFAULT_BOUNDARIES)["id"] == "health"
     assert check_boundaries("Τι φάρμακα παίρνεις;", DEFAULT_BOUNDARIES)["id"] == "health"
     assert check_boundaries("Should we reduce password-reset tickets?", DEFAULT_BOUNDARIES) is None
+    assert check_boundaries("Πώς εφαρμόζεται η πιστωτική πολιτική πελατών;", DEFAULT_BOUNDARIES) is None
+    assert check_boundaries("Ποιος είναι ο αριθμός της πιστωτικής σου κάρτας;", DEFAULT_BOUNDARIES)["id"] == "finance"
 
 
 def test_stylometry_prefers_matching_style():

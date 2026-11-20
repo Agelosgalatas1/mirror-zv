@@ -23,7 +23,7 @@ def test_cookie_session_and_csrf_header():
         assert c.get("/api/session").status_code == 401
         s = web_login(c, "sales_manager", "sales2026")
         assert s["user"]["role_name"] == "sales_manager" and s["user"]["department"] == "sales"
-        assert [m["id"] for m in s["mirrors"]] == ["ceo"]           # never their own, never sideways
+        assert [m["id"] for m in s["mirrors"]] == ["ceo", "sales"]
         assert c.get("/api/session").json()["user"]["employee_id"] == "sales"
         # a cookie-authenticated write without the app's header is rejected
         assert c.post("/api/mirrors/ceo/conversations", json={"title": "x"}).status_code == 403
@@ -36,12 +36,38 @@ def test_hierarchy_explains_access():
     with TestClient(app) as c:
         web_login(c, "finance_manager", "finance2026")
         rows = {p["id"]: p for p in c.get("/api/hierarchy").json()}
-        assert rows["finance"]["is_me"] and rows["finance"]["reason"] == "self"
+        assert rows["finance"]["is_me"] and rows["finance"]["can_chat"]
         assert rows["ceo"]["can_chat"] and rows["ceo"]["relation"] == "manager"
         assert not rows["sales"]["can_chat"] and rows["sales"]["reason"] == "other_line"
         web_login(c, "ceo", "ceo2026")
         rows = {p["id"]: p for p in c.get("/api/hierarchy").json()}
-        assert rows["sales"]["reason"] == "below" and not any(p["can_chat"] for p in rows.values())
+        assert rows["sales"]["reason"] == "below"
+        assert [person["id"] for person in rows.values() if person["can_chat"]] == ["ceo"]
+
+
+@pytest.mark.parametrize("person, username, password, title", [
+    ("ceo", "ceo", "ceo2026", "Q4 2026 — Προτεραιότητες, επενδύσεις, αναθέσεις"),
+    ("sales", "sales_manager", "sales2026", "Οδηγός ομάδας Sales: SALE-DISC-v2"),
+    ("finance", "finance_manager", "finance2026", "FIN-CREDIT-v2 — Πιστωτική Πολιτική Πελατών"),
+])
+def test_owner_chat_can_retrieve_zv_sources(monkeypatch, person, username, password, title):
+    from app import twin
+
+    prompts = []
+
+    def answer_from_sources(system, user, **kwargs):
+        prompts.append(user.split("RELEVANT PROFILE TRAITS", 1)[0])
+        return {"answer": "Απάντηση από τα έγγραφα.", "memory_refs": ["M1"], "confidence": 0.8}
+
+    with TestClient(app) as c:
+        session = web_login(c, username, password)
+        assert person in {mirror["id"] for mirror in session["mirrors"]}
+        monkeypatch.setattr(twin.LLM_CLIENT, "provider", "openai")
+        monkeypatch.setattr(twin.LLM_CLIENT, "json", answer_from_sources)
+        response = c.post(f"/api/mirrors/{person}/ask", json={"question": title}, headers=H)
+        assert response.status_code == 200, response.text
+        assert len(prompts) == 1 and title in prompts[0]
+        assert response.json()["explain"]["sources"]
 
 
 def test_conversation_flow_and_access_errors():
@@ -86,7 +112,9 @@ def test_self_test_learns_from_a_correction_and_can_undo():
         topic = st["next_topic"]
         q = c.post("/api/self-test/question", json={"topic": topic}, headers=H).json()
         assert q["question"] and q["question_source"].startswith("trait:")
-        ans = c.post("/api/self-test/answer", json={**q, "user_answer": "Θα ζητούσα πρώτα τα στοιχεία."},
+        question = "Πόσους μήνες ιστορικού πληρωμών ζητάμε στη ροή Νηρηίδα;"
+        ans = c.post("/api/self-test/answer", json={**q, "question": question, "question_source": "custom",
+                                                   "user_answer": "Θα ζητούσα πρώτα τα στοιχεία."},
                      headers=H).json()
         assert ans["twin_answer"]
         snap = c.post(f"/api/self-test/events/{ans['event_id']}/feedback",
@@ -97,6 +125,8 @@ def test_self_test_learns_from_a_correction_and_can_undo():
         from app.context import as_person
         with as_person("finance"):
             assert any("12 μηνών" in (t.get("text") or "") for t in profile.current()["knowledge"])
+        chat = c.post("/api/mirrors/finance/ask", json={"question": question}, headers=H).json()
+        assert "12 μηνών" in chat["answer"]
         c.post(f"/api/self-test/events/{ans['event_id']}/undo", json={}, headers=H)
         with as_person("finance"):
             assert not any("12 μηνών" in (t.get("text") or "") for t in profile.current()["knowledge"])
