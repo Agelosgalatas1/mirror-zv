@@ -12,7 +12,7 @@ import re
 import time
 from typing import Any
 
-from . import db, prompts, sharing
+from . import db, prompts, sharing, verified_chat
 from .ingest.pipeline import get_owner
 from .llm import LLM_CLIENT, LLMUnavailable
 from .context import pid
@@ -812,6 +812,23 @@ def _format_history(history: list[dict] | None) -> str:
     return "\n".join(lines) or "(new conversation)"
 
 
+def suggested_questions() -> list[str]:
+    prof = current_profile()
+    return verified_chat.suggestions(prof, _boundaries()) if prof else []
+
+
+def _reviewed_answer(prof: dict, question: str, history: list[dict] | None) -> dict | None:
+    if WHY_RE.fullmatch(_fold(question)) and history and len(history) >= 2:
+        previous_question, previous_answer = history[-2:]
+        text = previous_question.get("text")
+        if (previous_question.get("role") == "user" and previous_answer.get("mode") == "verified"
+                and isinstance(text, str) and not check_boundaries(text, _boundaries())):
+            previous = verified_chat.answer(prof, text, EXCLUDE)
+            if previous:
+                return {**previous, "answer": previous["why"]}
+    return verified_chat.answer(prof, question, EXCLUDE)
+
+
 # Επεξήγηση: Απαντά με προφίλ, σχετικά αποσπάσματα και ιστορικό· διαθέτει και offline διαδρομή.
 def ask(question: str, channel: str = "chat_team", *, log: bool = True, history: list[dict] | None = None) -> dict:
     prof = _profile()
@@ -820,6 +837,8 @@ def ask(question: str, channel: str = "chat_team", *, log: bool = True, history:
     b = check_boundaries(question, _boundaries())
     if b:
         res = _boundary_reply(b, owner.display_name)
+    elif verified := _reviewed_answer(prof, question, history):
+        res = verified
     else:
         last_user = next((h.get("text", "") for h in reversed(history or []) if h.get("role") == "user"), "")
         hits = memories(question + (" " + last_user if len(_words(question)) <= 3 else ""), k=8)

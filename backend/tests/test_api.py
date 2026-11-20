@@ -181,7 +181,7 @@ def test_ceo_quarter_priorities_are_in_the_shipped_profile():
 
     with TestClient(app):
         with as_person("ceo"):
-            result = twin.ask("Τι είναι προτεραιότητα αυτό το τρίμηνο;", log=False)
+            result = twin.ask("Ποιες προτεραιότητες έβαλες για το Q4 2026;", log=False)
 
     assert not result["unsure"]
     assert any(t["id"] == "k16" for t in result["traits"])
@@ -199,7 +199,7 @@ def test_live_model_abstention_cannot_hide_matching_profile_evidence(monkeypatch
     })
     with TestClient(app):
         with as_person("ceo"):
-            result = twin.ask("Σε pilot, αν ένα τιμολόγιο είναι πάνω από 15 ημέρες ληξιπρόθεσμο, ποιο stop-loss εφαρμόζω;",
+            result = twin.ask("Ποιο stop-loss εφαρμόζω σε pilot με τιμολόγιο πάνω από 15 ημέρες ληξιπρόθεσμο;",
                               log=False)
 
     assert not result["unsure"]

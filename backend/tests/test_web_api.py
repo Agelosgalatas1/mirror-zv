@@ -70,6 +70,37 @@ def test_owner_chat_can_retrieve_zv_sources(monkeypatch, person, username, passw
         assert response.json()["explain"]["sources"]
 
 
+@pytest.mark.parametrize("person, username, password", [
+    ("ceo", "ceo", "ceo2026"),
+    ("sales", "sales_manager", "sales2026"),
+    ("finance", "finance_manager", "finance2026"),
+])
+def test_reviewed_questions_answer_from_zv_without_a_model(monkeypatch, person, username, password):
+    from unittest.mock import Mock
+    from app import twin, verified_chat
+
+    model = Mock(side_effect=AssertionError("Reviewed questions should not call the model"))
+    with TestClient(app) as c:
+        web_login(c, username, password)
+        monkeypatch.setattr(twin.LLM_CLIENT, "provider", "openai")
+        monkeypatch.setattr(twin.LLM_CLIENT, "json", model)
+        base = f"/api/mirrors/{person}"
+        guides = verified_chat.GUIDES[person]
+        assert c.get(base + "/suggestions").json()["questions"] == [g["questions"][0] for g in guides[:4]]
+        for guide in guides:
+            for question in guide["questions"]:
+                result = c.post(base + "/ask", json={"question": question}, headers=H).json()
+                assert result["answer"] == guide["answer"]
+                explanation = result["explain"]
+                assert explanation["confidence"] == 1.0 and explanation["mode"] == "verified"
+                assert explanation["sources"] and not explanation["unsure"]
+        conversation = c.post(base + "/conversations", json={}, headers=H).json()["conversation_id"]
+        c.post(base + "/ask", headers=H, json={"question": guides[0]["questions"][0], "conversation_id": conversation})
+        why = c.post(base + "/ask", headers=H, json={"question": "γιατί;", "conversation_id": conversation}).json()
+        assert why["explain"]["mode"] == "verified" and why["explain"]["sources"]
+    model.assert_not_called()
+
+
 def test_conversation_flow_and_access_errors():
     with TestClient(app) as c:
         web_login(c, "sales_manager", "sales2026")
