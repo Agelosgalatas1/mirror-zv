@@ -49,7 +49,8 @@ const wordmark = () => h("div", { class: "brand", "aria-label": "MIRROR" }, logo
 const reduceMotion = matchMedia("(prefers-reduced-motion: reduce)").matches;
 
 /* ---------- state & API ---------- */
-const state = { session: null, view: "home", people: [], hierarchyError: false, mirror: null, thread: null, threads: [], messages: [], busy: false, offline: false, voiceTurn: null, looks: {}, rec: null, mode: "text", threadQuery: "", audio: null, micPending: false, transcribing: false, submitAfterTranscript: false, voiceOpen: false, voiceContinuous: false };
+const CHANNELS = [["chat_team", "Chat ομάδας"], ["chat_personal", "Προσωπικό chat"], ["email_internal", "Email (εσωτερικό)"], ["email_external", "Email (πελάτης/συνεργάτης)"]];
+const state = { channel: (() => { try { return localStorage.getItem("mirror-channel") || "chat_team"; } catch { return "chat_team"; } })(), session: null, view: "home", people: [], hierarchyError: false, mirror: null, thread: null, threads: [], messages: [], busy: false, offline: false, voiceTurn: null, looks: {}, rec: null, mode: "text", threadQuery: "", audio: null, micPending: false, transcribing: false, submitAfterTranscript: false, voiceOpen: false, voiceContinuous: false };
 const store = (k, v) => { try { v == null ? localStorage.removeItem(k) : localStorage.setItem(k, v); } catch { /* storage unavailable */ } };
 const load = k => { try { return localStorage.getItem(k); } catch { return null; } };
 // One abort scope per visible conversation. Backend work may finish after abort;
@@ -243,7 +244,7 @@ async function send(text) {
   state.busy = true; state.messages.push({ role: "user", text: question, voice: !!voiceTurn }, { role: "typing" }); paintChat();
   try {
     if (voiceTurn) {
-      const r = await api(`/api/voice/${voiceTurn}/confirm`, { text: question }, ctx);
+      const r = await api(`/api/voice/${voiceTurn}/confirm`, { text: question, channel: state.channel }, ctx);
       state.messages.splice(-1, 1, { role: "ai", text: r.answer, fresh: true, explain: r.explain, voiceTurn: r.has_audio ? voiceTurn : null }); state.offline = false;
       const vt = state.threads.find(x => String(x.conversation_id) === String(r.conversation_id ?? state.thread));
       if (vt) { vt.updated_at = new Date().toISOString(); vt.last_question = question; vt.last_answer = r.answer; vt.turns = (Number(vt.turns) || 0) + 1; state.threads = [vt, ...state.threads.filter(x => x !== vt)]; }
@@ -255,7 +256,7 @@ async function send(text) {
       }
       const spoken = responseMode !== "text";
       const endpoint = spoken ? `/api/mirrors/${ctx.mirror}/spoken-ask` : `/api/mirrors/${ctx.mirror}/ask`;
-      const r = await api(endpoint, { question, conversation_id: state.thread }, ctx);
+      const r = await api(endpoint, { question, conversation_id: state.thread, channel: state.channel }, ctx);
       state.messages.splice(-1, 1, { role: "ai", text: r.answer, fresh: true, explain: r.explain, voiceTurn: r.has_audio ? r.turn_id : null }); state.offline = false;
       if (r.has_audio && mode() === responseMode) loadAvatar(r.turn_id);
       else if (spoken && !r.has_audio) toast("Η απάντηση είναι έτοιμη. Η φωνή δεν ήταν διαθέσιμη αυτή τη φορά.");
@@ -303,27 +304,32 @@ function paintMain() {
   if (state.view === "home") { fill(main, homeView()); return; }
   fill(main, h("div", { class: "chat-shell", id: "chat-shell" }, h("div", { class: "chat" },
     h("header", { class: "chat-head", id: "head" }),
-    h("div", { class: "scroll", id: "scroll" }, h("div", { class: "thread-view", id: "messages", role: "log", "aria-live": "polite" })),
+    h("div", { class: "scroll", id: "scroll", onscroll: e => { const el = e.target; $("#to-bottom")?.classList.toggle("on", el.scrollHeight - el.clientHeight - el.scrollTop > 240); } },
+      h("div", { class: "thread-view", id: "messages", role: "log", "aria-live": "polite" })),
+    h("button", { class: "to-bottom", id: "to-bottom", type: "button", "aria-label": "Στα νεότερα μηνύματα", title: "Στα νεότερα μηνύματα",
+      onclick: () => { const sc = $("#scroll"); sc.scrollTop = sc.scrollHeight; } }, icon(["M12 5v14", "M6 13l6 6 6-6"], 18)),
     h("div", { class: "composer" },
+      h("div", { class: "followups", id: "followups", role: "group", "aria-label": "Γρήγορες συνέχειες" }),
       h("div", { class: "voice-hint", id: "voice-hint", hidden: true, role: "status" }),
       h("form", { class: "composer-box", onsubmit: e => { e.preventDefault(); send(); } },
         h("textarea", { id: "composer", rows: "1", maxlength: "4000", "aria-label": "Μήνυμα", placeholder: "Γράψε ένα μήνυμα…",
-          oninput: e => { autosize(e.target); if (!e.target.value.trim() && state.voiceTurn) { state.voiceTurn = null; voiceHint(); } },
-          onkeydown: e => { if (e.key === "Enter" && !e.shiftKey && !e.isComposing) { e.preventDefault(); send(); } } }),
-        h("div", { class: "composer-bar" },
-          h("div", { class: "mode-switch", id: "mode-switch", role: "group", "aria-label": "Τρόπος απάντησης", "data-mode": mode() },
-            h("span", { class: "mode-glider", "aria-hidden": "true" }),
-            [["text", "Κείμενο", I.chat, "Απάντηση με κείμενο"], ["voice", "Φωνή", I.speaker, "Απάντηση με τη φωνή του προσώπου"],
-             ["avatar", "Avatar", I.face, "Απάντηση με φωνή και ζωντανό πρόσωπο"]].map(([value, label, glyph, tip]) =>
-              h("button", { type: "button", "data-mode": value, title: tip, "aria-pressed": String(mode() === value), onclick: () => setMode(value) }, icon(glyph, 15), h("span", {}, label)))),
-          h("button", { class: "voice-live", id: "open-voice", type: "button", onclick: openVoice, title: "Φωνητική συζήτηση χωρίς χέρια: μιλάς, ακούει, απαντά, ξανακούει" },
-            h("i", { class: "live-dot", "aria-hidden": "true" }), h("span", {}, "Voice avatar")),
-          h("span", { class: "bar-gap" }),
-          h("button", { class: "mic", id: "mic", type: "button", hidden: true, "aria-label": "Μίλησε (έως 30 δευτερόλεπτα)", title: "Υπαγόρευση", onclick: toggleRecord }, icon(I.mic)),
-          h("button", { class: "send", type: "submit", "aria-label": "Αποστολή", title: "Αποστολή (Enter)" }, icon(I.send)))),
+          oninput: e => { autosize(e.target); paintCount(); if (!e.target.value.trim() && state.voiceTurn) { state.voiceTurn = null; voiceHint(); } },
+          onkeydown: e => {
+            if (e.key === "Enter" && !e.shiftKey && !e.isComposing) { e.preventDefault(); send(); }
+            else if (e.key === "ArrowUp" && !e.target.value) { const q = [...state.messages].reverse().find(m => m.role === "user"); if (q) { e.preventDefault(); e.target.value = q.text; autosize(e.target); paintCount(); } }
+          } }),
+        h("button", { class: "mic", id: "mic", type: "button", hidden: true, "aria-label": "Μίλησε (έως 30 δευτερόλεπτα)", title: "Υπαγόρευση με φωνή", onclick: toggleRecord }, icon(I.mic)),
+        h("button", { class: "send", type: "submit", "aria-label": "Αποστολή", title: "Αποστολή (Enter)" }, icon(I.send))),
       h("div", { class: "composer-foot" },
-        h("p", { class: "response-hint", id: "response-hint" }),
-        h("p", { class: "disclaimer" }, "Το MIRROR είναι AI και μπορεί να κάνει λάθη. Τις εγκρίσεις τις κάνουν πάντα άνθρωποι.")))),
+        h("label", { class: "style-pick", title: "Σε ποιο ύφος να απαντήσει το AI" }, "Ύφος",
+          h("select", { id: "channel", "aria-label": "Ύφος απάντησης", onchange: e => { state.channel = e.target.value; store("mirror-channel", state.channel); } },
+            CHANNELS.map(([v, label]) => h("option", { value: v, selected: v === state.channel }, label)))),
+        h("button", { class: "voice-live", id: "open-voice", type: "button", onclick: openVoice, title: "Φωνητική συζήτηση χωρίς χέρια: μιλάς, ακούει, απαντά, ξανακούει" },
+          h("i", { class: "live-dot", "aria-hidden": "true" }), h("span", {}, "Voice avatar")),
+        h("span", { class: "bar-gap" }),
+        h("span", { class: "char-count", id: "char-count", "aria-live": "off" }),
+        h("p", { class: "response-hint", id: "response-hint" })),
+      h("p", { class: "disclaimer" }, "Το MIRROR είναι AI και μπορεί να κάνει λάθη. Τις εγκρίσεις τις κάνουν πάντα άνθρωποι."))),
     h("aside", { class: "avatar-panel", id: "avatar-panel", hidden: true, "aria-label": "Ανθρώπινο avatar" },
       h("iframe", { id: "avatar-frame", title: "MIRROR avatar", allow: "autoplay", src: "about:blank" })), voiceDialog()));
   paintHead(); paintChat(); loadAvatar();
@@ -395,6 +401,11 @@ function paintHead() {
   fill(head, h("button", { class: "iconbtn menu-toggle", "aria-label": "Μενού", onclick: () => $("#app").classList.add("nav-open") }, icon(I.menu)),
     h("button", { class: "iconbtn", "aria-label": "Πίσω στην ομάδα", title: "Πίσω στην ομάδα", onclick: goHome }, icon(I.back)),
     p ? [avatar(p, "", true), h("div", {}, h("b", {}, p.name), h("small", {}, `AI αντίγραφο · ${p.job_title}`))] : h("b", {}, "MIRROR"),
+    h("div", { class: "mode-switch", id: "mode-switch", role: "group", "aria-label": "Τρόπος απάντησης", "data-mode": mode() },
+      h("span", { class: "mode-glider", "aria-hidden": "true" }),
+      [["text", "Κείμενο", I.chat, "Απάντηση με κείμενο"], ["voice", "Φωνή", I.speaker, "Απάντηση με τη φωνή του προσώπου"],
+       ["avatar", "Avatar", I.face, "Απάντηση με φωνή και ζωντανό πρόσωπο"]].map(([value, label, glyph, tip]) =>
+        h("button", { type: "button", "data-mode": value, title: tip, "aria-pressed": String(mode() === value), onclick: () => setMode(value) }, icon(glyph, 14), h("span", {}, label)))),
     h("button", { class: "iconbtn face-toggle", id: "face-toggle", hidden: true, "aria-label": "Εμφάνιση/απόκρυψη avatar", title: "Avatar", onclick: () => $("#chat-shell")?.classList.toggle("show-face") }, icon(I.face)),
     h("span", { class: "ai-badge" + (state.session.ai?.online ? " on" : ""), title: state.session.ai?.online ? `Γράφει με ${state.session.ai.provider}:${state.session.ai.model}` : "Χωρίς κλειδί AI: απαντά από τα δεδομένα του προσώπου, χωρίς να γράφει νέο κείμενο" },
       state.session.ai?.online ? `AI · ${state.session.ai.model}` : "Offline"),
@@ -1006,6 +1017,12 @@ function infoBox(title, text, action) {
       h("div", { class: "row" }, action ? h("button", { class: "btn", onclick: () => done(false) }, "Κλείσιμο") : null, primary)) };
   });
 }
+/* Keyboard: "/" writes a message, Esc stops any voice, as in the earlier MIRROR chat. */
+document.addEventListener("keydown", e => {
+  const typing = /^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement?.tagName || "") || document.activeElement?.isContentEditable;
+  if (e.key === "/" && !typing && state.view === "chat" && !$("#overlay")?.classList.contains("on")) { e.preventDefault(); $("#composer")?.focus(); }
+  if (e.key === "Escape" && (speaking || state.audio) && !$("#overlay")?.classList.contains("on")) { stopSpeaking(); stopVoice({ keepAvatar: true }); }
+});
 let resizeTimer;
 window.addEventListener("resize", () => { clearTimeout(resizeTimer); resizeTimer = setTimeout(() => state.view === "home" && state.redraw && state.redraw(), 120); });
 
@@ -1022,26 +1039,78 @@ function suggestions() {
   if (role === "ceo") return ["Πώς θα απαντούσα σε πελάτη που ζητά αποκλειστικότητα;", "Ποιος εγκρίνει έκπτωση 13%;", "Τι είναι προτεραιότητα αυτό το τρίμηνο;", "Πώς θα έγραφα ένα σύντομο email άρνησης;"];
   return ["Ποιος εγκρίνει έκπτωση 11%;", "Πώς βλέπεις ένα pilot αντί για αποκλειστικότητα;", "Τι κάνω με πελάτη που καθυστερεί πληρωμές;", "Τι είναι προτεραιότητα αυτό το τρίμηνο;"];
 }
-/* Why the AI said it: the traits and the person's own messages behind an answer (kept from the earlier MIRROR UI). */
-function explainView(x, p) {
-  if (!x) return null;
+/* ---------- answers: confidence, evidence chips and actions inside the answer (as in the earlier MIRROR chat) ---------- */
+function showEvidence(x, p, focus) {
+  showOverlay(done => {
+    const close = h("button", { class: "iconbtn", type: "button", "aria-label": "Κλείσιμο", onclick: () => done(false) }, icon(I.close));
+    const traits = focus ? [focus, ...x.traits.filter(t => t !== focus)] : x.traits;
+    return { focus: close, node: h("section", { class: "dialog evidence-dialog", role: "dialog", "aria-modal": "true", "aria-label": "Από πού το ξέρω" },
+      h("header", { class: "evidence-head" }, h("div", {}, h("p", { class: "self-test-eyebrow" }, "MIRROR / ΑΠΟΔΕΙΞΕΙΣ"),
+        h("h3", {}, "Από πού το ξέρω"), h("p", { class: "muted small" }, `Τι χρησιμοποίησε το AI αντίγραφο του προσώπου «${p.name}» για αυτή την απάντηση.`)), close),
+      x.why ? h("p", { class: "why-text" }, x.why) : null,
+      traits.length ? h("div", { class: "why-group" }, h("h5", {}, "Χαρακτηριστικά του προσώπου"),
+        traits.map(t => h("div", { class: "why-trait" + (t.inherited_from ? " inherited" : "") + (t === focus ? " focus" : "") },
+          h("small", {}, t.inherited_from ? `Κανόνας εταιρείας από ${t.inherited_from}` : t.kind), h("span", {}, t.text)))) : null,
+      x.sources.length ? h("div", { class: "why-group" }, h("h5", {}, "Πραγματικά μηνύματα και έγγραφα"),
+        x.sources.map(src => h("blockquote", { class: "why-src" }, h("p", {}, "«" + src.quote + "»"), h("small", {}, (src.own ? "Δικό του/της · " : "") + src.label)))) : null,
+      !traits.length && !x.sources.length ? h("p", { class: "muted" }, "Δεν υπάρχουν αποδείξεις για αυτή την απάντηση· γι' αυτό το AI δηλώνει ότι δεν είναι σίγουρο.") : null,
+      h("div", { class: "row" }, h("button", { class: "btn primary", type: "button", onclick: () => done(false) }, "Εντάξει"))) };
+  });
+}
+function answerMeta(m, p) {
+  const x = m.explain; if (!x) return null;
   const pct = typeof x.confidence === "number" ? Math.round(x.confidence * 100) : null;
-  const chips = h("div", { class: "why-chips" },
-    x.boundary ? h("span", { class: "chip warn" }, icon(I.lock, 12), "Προσωπικό όριο") : null,
-    x.unsure && !x.boundary ? h("span", { class: "chip warn" }, "Δεν είμαι σίγουρο") : null,
-    x.traits.some(t => t.inherited_from) ? h("span", { class: "chip co" }, `Κανόνας εταιρείας · ${x.traits.find(t => t.inherited_from).inherited_from}`) : null,
-    pct !== null && !x.boundary ? h("span", { class: "chip conf", title: "Πόσο στηρίζεται η απάντηση στα δεδομένα του προσώπου" },
-      h("i", { style: { "--p": pct + "%" } }), `Βεβαιότητα ${pct}%`) : null);
-  if (!x.traits.length && !x.sources.length && !x.why) return chips.childNodes.length ? chips : null;
-  const body = h("div", { class: "why-body" },
-    x.why ? h("p", { class: "why-text" }, x.why) : null,
-    x.traits.length ? h("div", { class: "why-group" }, h("h5", {}, "Στηρίζεται σε"),
-      x.traits.map(t => h("div", { class: "why-trait" + (t.inherited_from ? " inherited" : "") },
-        h("small", {}, t.inherited_from ? `Κανόνας εταιρείας από ${t.inherited_from}` : t.kind), h("span", {}, t.text)))) : null,
-    x.sources.length ? h("div", { class: "why-group" }, h("h5", {}, `Από τα μηνύματα ${first(p.name) ? "του προσώπου" : ""}`.trim()),
-      x.sources.map(src => h("blockquote", { class: "why-src" }, h("p", {}, "«" + src.quote + "»"), h("small", {}, src.label)))) : null);
-  return h("div", { class: "why" }, chips.childNodes.length ? chips : null,
-    h("details", { class: "why-details" }, h("summary", {}, icon(I.search, 13), "Γιατί το λέω"), body));
+  return h("div", { class: "bubble-meta" },
+    x.boundary ? h("span", { class: "chip warn" }, icon(I.lock, 12), "Προσωπικό όριο")
+      : pct !== null ? h("span", { class: "chip conf", title: "Πόσο στηρίζεται η απάντηση στα δεδομένα του προσώπου" }, h("i", { style: { "--p": pct + "%" } }), `${pct}%`) : null,
+    x.unsure && !x.boundary ? h("span", { class: "chip warn" }, "δεν είναι σίγουρο") : null,
+    x.traits.slice(0, 3).map(t => h("button", { type: "button", class: "chip chip-btn" + (t.inherited_from ? " co" : ""), title: t.text, onclick: () => showEvidence(x, p, t) },
+      icon(I.search, 12), t.inherited_from ? `κανόνας από ${t.inherited_from}` : t.kind.toLowerCase())),
+    x.sources.length ? h("button", { type: "button", class: "chip chip-btn", onclick: () => showEvidence(x, p) }, icon(I.chat, 12), `${x.sources.length} ${x.sources.length === 1 ? "απόδειξη" : "αποδείξεις"}`) : null);
+}
+/* Read any answer aloud: the person's own voice (ElevenLabs) when the server has it, otherwise the browser's Greek voice. */
+let speaking = null;
+function stopSpeaking() {
+  if (speaking?.audio) { speaking.audio.pause(); URL.revokeObjectURL(speaking.audio.src); }
+  try { speechSynthesis.cancel(); } catch { /* not supported */ }
+  const btn = speaking?.btn; speaking = null; if (btn) { btn.setAttribute("aria-pressed", "false"); fill(btn, icon(I.speaker, 15)); }
+}
+async function speakText(text, btn) {
+  if (speaking?.btn === btn) { stopSpeaking(); return; }
+  stopSpeaking(); stopVoice();
+  const mine = speaking = { btn, audio: null };
+  btn.setAttribute("aria-pressed", "true"); fill(btn, icon(I.stop, 15));
+  const done = () => { if (speaking === mine) stopSpeaking(); };
+  try {
+    const res = await fetch("/api/voice/speak", { method: "POST", credentials: "same-origin",
+      headers: { "Content-Type": "application/json", "X-Mirror-Request": "1" }, body: JSON.stringify({ text, target: state.mirror?.id }) });
+    if (!res.ok) throw new Error("no premium voice");
+    const blob = await res.blob(); if (speaking !== mine) return;
+    mine.audio = new Audio(URL.createObjectURL(blob)); mine.audio.onended = done; await mine.audio.play();
+  } catch {
+    if (speaking !== mine) return;
+    try {
+      const u = new SpeechSynthesisUtterance(text); u.lang = "el-GR"; u.onend = done; u.onerror = done; speechSynthesis.speak(u);
+    } catch { done(); toast("Η φωνή δεν είναι διαθέσιμη σε αυτόν τον browser.", true); }
+  }
+}
+function paintFollowups() {
+  const box = $("#followups"); if (!box) return;
+  const lastMsg = state.messages[state.messages.length - 1];
+  const show = !state.busy && lastMsg?.role === "ai" && !lastMsg.explain?.boundary;
+  box.hidden = !show; if (!show) { fill(box); return; }
+  const q = [...state.messages].reverse().find(m => m.role === "user")?.text || "";
+  fill(box, ["γιατί;", "και τι άλλο;", q ? "Πώς θα το έλεγες σε πελάτη;" : null].filter(Boolean)
+    .map(f => h("button", { type: "button", class: "chip chip-btn", onclick: () => send(f) }, f)));
+}
+function paintCount() {
+  const box = $("#composer"), out = $("#char-count"); if (!box || !out) return;
+  const n = box.value.length; out.textContent = n > 3200 ? `${n}/4000` : "";
+}
+function editQuestion(text) {
+  const box = $("#composer"); if (!box || state.busy) return;
+  box.value = text; autosize(box); paintCount(); box.focus(); box.setSelectionRange(text.length, text.length);
+  toast("Διόρθωσε την ερώτηση και πάτα Enter.");
 }
 function paintChat() {
   const list = $("#messages"); if (!list) return;
@@ -1051,35 +1120,43 @@ function paintChat() {
   if (!state.messages.length) {
     fill(list, h("div", { class: "welcome" }, avatar(p, "lg", true),
       h("h2", {}, new Date().getHours() < 12 ? "Καλημέρα!" : "Καλησπέρα!"),
-      h("p", {}, `Είσαι σε συνομιλία με το AI αντίγραφο του προσώπου «${p.name}». Ρώτα ό,τι θα ρωτούσες κι από κοντά.`),
+      h("p", {}, `Είσαι σε συνομιλία με το AI αντίγραφο του προσώπου «${p.name}». Ρώτα ό,τι θα ρωτούσες κι από κοντά, και μετά ρώτα «γιατί;» για να δεις από πού το ξέρει.`),
       h("div", { class: "ideas" }, suggestions().map(q => h("button", { onclick: () => send(q) }, q)))));
     return;
   }
   const last = state.messages.length - 1;
+  const lastQuestion = [...state.messages].reverse().find(m => m.role === "user")?.text;
   fill(list, state.messages.map((m, i) => {
     if (m.role === "loading") return h("div", {}, h("div", { class: "skeleton", style: { width: "60%" } }), h("div", { class: "skeleton", style: { width: "40%" } }));
-    if (m.role === "user") return h("div", { class: "row-msg user" }, h("div", { class: "bubble" }, m.voice ? h("span", { class: "voice-tag", "aria-label": "φωνητικό" }, icon(I.mic, 13)) : null, m.text));
+    if (m.role === "user") return h("div", { class: "row-msg user" },
+      h("button", { class: "edit-q", type: "button", "aria-label": "Επεξεργασία και ξανά", title: "Επεξεργασία και ξανά", onclick: () => editQuestion(m.text) }, icon(I.edit, 14)),
+      h("div", { class: "bubble" }, m.voice ? h("span", { class: "voice-tag", "aria-label": "φωνητικό" }, icon(I.mic, 13)) : null, m.text));
     if (m.role === "typing") return h("div", { class: "row-msg ai" }, avatar(p), h("span", { class: "typing", "aria-label": "Γράφει…" }, h("i"), h("i"), h("i")));
     if (m.role === "note") return h("div", { class: "row-msg note" }, h("div", { class: "bubble" }, m.text));
-    const text = h("div", { class: "bubble" });
+    const text = h("div", { class: "bubble-text" });
     if (m.fresh && !reduceMotion) { m.fresh = false; typewrite(text, m.text); } else text.textContent = m.text;
-    const up = h("button", { "aria-label": "Καλή απάντηση", title: "Καλή απάντηση" }, icon(I.up, 15));
+    const up = h("button", { "aria-label": "Μοιάζει με το πρόσωπο", title: "Μοιάζει με το πρόσωπο" }, icon(I.up, 15));
     const down = h("button", { "aria-label": "Δεν μοιάζει με το πρόσωπο", title: "Δεν μοιάζει με το πρόσωπο" }, icon(I.down, 15));
-    const rate = (btn, rating, label) => async () => {
+    const rate = (btn, other, rating, label) => async () => {
       const ctx = conversationContext(); btn.disabled = true;
       try {
         await api(`/api/mirrors/${ctx.mirror}/persona-feedback`, { rating }, ctx);
-        btn.setAttribute("aria-pressed", "true"); toast(label);
-      } catch (error) { if (currentContext(ctx)) toast(error.message, error.code !== "persona_not_ready"); }
+        btn.setAttribute("aria-pressed", "true"); other.setAttribute("aria-pressed", "false"); m.rated = rating; toast(label);
+      } catch (error) { if (currentContext(ctx)) toast(error.message, true); }
       finally { if (currentContext(ctx)) btn.disabled = false; }
     };
-    up.onclick = rate(up, "faithful", "Ευχαριστούμε!"); down.onclick = rate(down, "uncharacteristic", "Ευχαριστούμε — η αξιολόγηση αποθηκεύτηκε.");
-    return h("div", { class: "row-msg ai" + (i === last ? " latest" : "") }, avatar(p), h("div", { class: "body" }, text, explainView(m.explain, p),
-      h("div", { class: "actions" },
-        m.voiceTurn ? h("button", { "aria-label": "Άκουσε ξανά", title: "Άκουσε ξανά", onclick: () => { if(mode() === "text"){state.mode="voice";paintHead()} loadAvatar(m.voiceTurn); } }, icon(I.speaker, 15)) : null,
-        h("button", { "aria-label": "Αντιγραφή", title: "Αντιγραφή", onclick: async () => toast(...(await copyText(m.text) ? ["Αντιγράφηκε."] : ["Δεν επιτράπηκε η αντιγραφή.", true])) }, icon(I.copy, 15)),
-        up, down)));
+    up.onclick = rate(up, down, "faithful", "Ευχαριστούμε! Σημειώθηκε ότι μοιάζει."); down.onclick = rate(down, up, "uncharacteristic", "Ευχαριστούμε. Σημειώθηκε ότι δεν μοιάζει.");
+    if (m.rated) (m.rated === "faithful" ? up : down).setAttribute("aria-pressed", "true");
+    const listen = h("button", { "aria-label": "Άκουσε", title: "Άκουσε" }, icon(I.speaker, 15));
+    listen.onclick = () => m.voiceTurn && mode() !== "text" ? loadAvatar(m.voiceTurn) : speakText(m.text, listen);
+    return h("div", { class: "row-msg ai" + (i === last ? " latest" : "") }, avatar(p), h("div", { class: "body" },
+      h("div", { class: "bubble twin" }, text, answerMeta(m, p),
+        h("div", { class: "actions" }, listen,
+          h("button", { "aria-label": "Αντιγραφή", title: "Αντιγραφή", onclick: async () => toast(...(await copyText(m.text) ? ["Αντιγράφηκε."] : ["Δεν επιτράπηκε η αντιγραφή.", true])) }, icon(I.copy, 15)),
+          up, down,
+          i === last && lastQuestion ? h("button", { class: "again", "aria-label": "Ξαναρώτα", title: "Ξαναρώτα την ίδια ερώτηση", onclick: () => send(lastQuestion) }, icon(I.back, 15), h("span", {}, "Ξανά")) : null))));
   }));
+  paintFollowups();
   const sc = $("#scroll"); sc.scrollTop = sc.scrollHeight;
 }
 function typewrite(node, text) {

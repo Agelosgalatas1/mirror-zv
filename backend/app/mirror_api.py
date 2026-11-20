@@ -66,6 +66,13 @@ SECTION_LABELS = {"values": "Αξία", "knowledge": "Γνώση", "preferences"
                   "relationships": "Συνεργασία"}
 
 
+def _plain(text) -> str:
+    """Markdown/table residue out of a quoted snippet, so it reads as text."""
+    t = re.sub(r"\|?\s*-{3,}\s*\|?", " ", str(text or ""))
+    t = re.sub(r"[#*`>|_]+", " ", t)
+    return " ".join(t.split())
+
+
 def explain(res: dict) -> dict:
     """What the browser may show under an answer: why, which traits, which of the person's own messages."""
     traits = []
@@ -77,7 +84,7 @@ def explain(res: dict) -> dict:
     for m in (res.get("memories") or [])[:3]:
         where = twin.CHANNEL_LABELS.get(m.get("channel") or "", m.get("channel") or "")
         sources.append({"label": " · ".join(x for x in (m.get("subject"), where, m.get("date")) if x),
-                        "quote": " ".join(str(m.get("snippet") or "").split())[:260],
+                        "quote": _plain(m.get("snippet"))[:260],
                         "own": m.get("author") == "me"})
     return {"why": res.get("why") or "", "confidence": res.get("confidence"), "unsure": bool(res.get("unsure")),
             "boundary": bool(res.get("boundary")), "mode": res.get("mode") or ("llm" if LLM_CLIENT.available else "offline"),
@@ -220,12 +227,16 @@ def delete(mid: str, cid: str, user: dict = Depends(current_user)):
 
 # ------------------------------------------------------------------ asking
 
+CHANNELS = ("chat_team", "chat_personal", "email_internal", "email_external")
+
+
 class AskIn(BaseModel):
     question: str = Field(min_length=1, max_length=4000)
     conversation_id: str | None = None
+    channel: str = "chat_team"
 
 
-def answer_in_conversation(user: dict, mid: str, question: str, cid: str | None) -> dict:
+def answer_in_conversation(user: dict, mid: str, question: str, cid: str | None, channel: str = "chat_team") -> dict:
     """Ask the twin inside a saved conversation (its history gives context to follow-ups) and store the turn."""
     conv = _conversation(user, mid, cid) if cid else None
     history: list[dict] = []
@@ -235,7 +246,7 @@ def answer_in_conversation(user: dict, mid: str, question: str, cid: str | None)
         history = [{"role": r["role"], "text": r["text"],
                     "traits": [t["id"] for t in (r["payload"] or {}).get("traits", [])]} for r in reversed(rows)]
     with as_person(mid):
-        res = twin.ask(" ".join(question.split()), "chat_team", history=history)
+        res = twin.ask(" ".join(question.split()), channel if channel in CHANNELS else "chat_team", history=history)
     if conv:
         now = time.time()
         db.execute("INSERT INTO messages(conversation_id, role, text, payload, created_at) VALUES(?,?,?,?,?)",
@@ -251,7 +262,7 @@ def answer_in_conversation(user: dict, mid: str, question: str, cid: str | None)
 @router.post("/mirrors/{mid}/ask")
 def ask(mid: str, body: AskIn, user: dict = Depends(current_user)):
     guard(user, mid)
-    res = answer_in_conversation(user, mid, body.question, body.conversation_id)
+    res = answer_in_conversation(user, mid, body.question, body.conversation_id, body.channel)
     return {"answer": res["answer"], "conversation_id": res.get("conversation_id"), "explain": explain(res)}
 
 
@@ -268,7 +279,7 @@ def _speak_into(turn_id: str, answer: str, mid: str) -> bool:
 @router.post("/mirrors/{mid}/spoken-ask")
 def spoken_ask(mid: str, body: AskIn, user: dict = Depends(current_user)):
     guard(user, mid)
-    res = answer_in_conversation(user, mid, body.question, body.conversation_id)
+    res = answer_in_conversation(user, mid, body.question, body.conversation_id, body.channel)
     turn_id = uuid.uuid4().hex
     db.execute("INSERT INTO voice_turns(id, user_id, target, conversation_id, message_id, transcript, state, created_at) "
                "VALUES(?,?,?,?,?,?,?,?)", (turn_id, user["id"], mid, int(res["conversation_id"]) if res.get(
@@ -337,7 +348,7 @@ def confirm(tid: str, body: dict, user: dict = Depends(current_user)):
     if not text:
         raise HTTPException(400, "Το μήνυμα είναι κενό.")
     cid = str(row["conversation_id"]) if row["conversation_id"] else None
-    res = answer_in_conversation(user, row["target"], text, cid)
+    res = answer_in_conversation(user, row["target"], text, cid, str(body.get("channel") or "chat_team"))
     db.execute("UPDATE voice_turns SET transcript=?, message_id=?, state='PENDING' WHERE id=?",
                (text, res.get("message_id"), tid))
     has_audio = _speak_into(tid, res["answer"], row["target"])
