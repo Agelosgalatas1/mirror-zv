@@ -318,7 +318,7 @@ function paintMain() {
             if (e.key === "Enter" && !e.shiftKey && !e.isComposing) { e.preventDefault(); send(); }
             else if (e.key === "ArrowUp" && !e.target.value) { const q = [...state.messages].reverse().find(m => m.role === "user"); if (q) { e.preventDefault(); e.target.value = q.text; autosize(e.target); paintCount(); } }
           } }),
-        h("button", { class: "mic", id: "mic", type: "button", hidden: true, "aria-label": "Μίλησε (έως 30 δευτερόλεπτα)", title: "Υπαγόρευση με φωνή", onclick: toggleRecord }, icon(I.mic)),
+        h("button", { class: "mic", id: "mic", type: "button", "aria-label": "Μίλησε (έως 30 δευτερόλεπτα)", title: "Υπαγόρευση με φωνή", onclick: toggleRecord }, icon(I.mic)),
         h("button", { class: "send", type: "submit", "aria-label": "Αποστολή", title: "Αποστολή (Enter)" }, icon(I.send))),
       h("div", { class: "composer-foot" },
         h("label", { class: "style-pick", title: "Σε ποιο ύφος να απαντήσει το AI" }, "Ύφος",
@@ -484,7 +484,7 @@ function paintVoiceControls() {
   $("#mode-switch")?.setAttribute("data-mode", mode());
   const live = $("#open-voice"); if (live) live.setAttribute("aria-pressed", String(state.voiceOpen));
   const responseHint = $("#response-hint");
-  if (responseHint) responseHint.textContent = mode() === "text" ? "Enter για αποστολή · Shift+Enter για νέα γραμμή" : mode() === "voice" ? "Γράψε ή πάτα 🎤 — η απάντηση ακούγεται με τη φωνή του προσώπου" : "Γράψε ή πάτα 🎤 — η απάντηση έρχεται με φωνή και ζωντανό πρόσωπο";
+  if (responseHint) responseHint.textContent = mode() === "text" ? "🎤 Υπαγόρευση → έλεγχος κειμένου → αποστολή · Η απάντηση παραμένει γραπτή" : mode() === "voice" ? "Γράψε ή πάτα 🎤 — η απάντηση ακούγεται με τη φωνή του προσώπου" : "Γράψε ή πάτα 🎤 — η απάντηση έρχεται με φωνή και ζωντανό πρόσωπο";
   const pending = state.transcribing || state.micPending;
   const mic = $("#mic"), submit = $(".send"), box = $("#composer");
   if (mic) {
@@ -597,13 +597,13 @@ async function loadAvatar(turn) {
   if (!panel || !frame) return;
   if (mode() === "text") {
     panel.hidden = true; frame.src = "about:blank"; $("#chat-shell")?.classList.add("voice-only");
-    $("#mic").hidden = true; $("#face-toggle").hidden = true; paintVoiceControls(); return;
+    $("#mic").hidden = !navigator.mediaDevices?.getUserMedia; $("#face-toggle").hidden = true; paintVoiceControls(); return;
   }
   let look;
   try { look = await lookFor(mid, ctx); } catch { if (!currentContext(ctx)) return; look = { available: false, voice: false }; }
   if (!currentContext(ctx) || request !== avatarRequest) return;
   const switcher = $("#mode-switch"); if (switcher) switcher.hidden = false;
-  $("#mic") && ($("#mic").hidden = !look.voice || mode() === "text");
+  $("#mic") && ($("#mic").hidden = !look.voice || !navigator.mediaDevices?.getUserMedia);
   const voiceOnly = mode() === "voice" || !look.available;
   panel.hidden = voiceOnly; $("#chat-shell")?.classList.toggle("voice-only", voiceOnly); $("#face-toggle") && ($("#face-toggle").hidden = voiceOnly);
   if (voiceOnly) { frame.src = "about:blank"; if (turn) playVoice(turn); return; }
@@ -637,7 +637,7 @@ function voiceHint(text, opts = {}) {
   if (!text && state.voiceTurn) text = "Έλεγξε τη μεταγραφή, διόρθωσε αν χρειάζεται και πάτα αποστολή.";
   el.hidden = !text; if (!text) return;
   fill(el, opts.rec ? h("i", { class: "rec-dot" }) : icon(I.mic, 14), h("span", {}, text),
-    state.voiceTurn || opts.rec || state.transcribing ? h("button", { type: "button", onclick: () => { if (state.rec || state.transcribing || state.micPending) stopRecord(true); state.voiceTurn = null; const c = $("#composer"); if (c && !opts.rec) { c.value = ""; autosize(c); } voiceHint(); } }, "Ακύρωση") : null);
+    state.voiceTurn || opts.review || opts.rec || state.transcribing ? h("button", { type: "button", onclick: () => { if (state.rec || state.transcribing || state.micPending) stopRecord(true); state.voiceTurn = null; const c = $("#composer"); if (c && !opts.rec) { c.value = ""; autosize(c); } voiceHint(); } }, "Ακύρωση") : null);
 }
 async function toggleRecord() {
   if (state.rec) return stopRecord(false, state.voiceOpen);
@@ -690,7 +690,7 @@ async function stopRecord(cancel = false, submit = false) {
   if (!rec) { if (cancel) { voiceHint(); paintVoiceControls(); } return; }
   state.transcribing = !cancel; state.submitAfterTranscript = !cancel && submit;
   clearInterval(rec.timer); rec.node.disconnect(); rec.source.disconnect(); rec.stream.getTracks().forEach(t => t.stop());
-  const rate = rec.ctx.sampleRate, ctx = rec.context, active = () => currentContext(ctx) && request === recordingRequest;
+  const rate = rec.ctx.sampleRate, ctx = rec.context, textOnly = mode() === "text", active = () => currentContext(ctx) && request === recordingRequest;
   const mic = $("#mic"); if (mic) { mic.classList.remove("on"); fill(mic, icon(I.mic)); }
   orbLevel(0); paintVoiceControls();
   await rec.ctx.close().catch(() => {});
@@ -701,12 +701,14 @@ async function stopRecord(cancel = false, submit = false) {
     if (length / rate < .6) { state.voiceContinuous = false; voiceHint(); toast("Πολύ σύντομη ηχογράφηση. Κράτα το λίγο περισσότερο."); return; }
     const samples = new Float32Array(length); let o = 0; for (const c of rec.chunks) { samples.set(c, o); o += c.length; }
     voiceHint("Μεταγραφή…");
-    if (!state.thread) {
+    if (!textOnly && !state.thread) {
       const t = await api(`/api/mirrors/${ctx.mirror}/conversations`, { title: "Φωνητική συζήτηση" }, ctx);
       if (!active()) return;
       state.thread = String(t.conversation_id); store(threadKey(), state.thread); state.threads.unshift(t); paintSidebar();
     }
-    const res = await fetch(`/api/mirrors/${ctx.mirror}/voice?conversation_id=${encodeURIComponent(state.thread)}`,
+    // Text dictation only transcribes; sending follows the normal text-chat path.
+    const endpoint = textOnly ? "/api/voice/transcribe" : `/api/mirrors/${ctx.mirror}/voice?conversation_id=${encodeURIComponent(state.thread)}`;
+    const res = await fetch(endpoint,
       { method: "POST", credentials: "same-origin", signal: ctx.signal, headers: { "Content-Type": "audio/wav", "X-Mirror-Request": "1" }, body: encodeWav(samples, rate) });
     const data = await res.json().catch(() => ({}));
     if (!active()) return;
@@ -715,11 +717,16 @@ async function stopRecord(cancel = false, submit = false) {
       if (res.status === 403 && data.code === "mirror_access") withdrawMirror(data.mirror_id);
       throw new Error(friendly(res.status, data));
     }
-    if (!data.turn_id || !data.transcript?.trim()) throw new Error("Δεν ακούστηκε κάποιο μήνυμα. Δοκίμασε ξανά.");
-    state.voiceTurn = data.turn_id;
-    const box = $("#composer"); box.value = data.transcript; autosize(box);
+    const transcript = (textOnly ? data.text : data.transcript)?.trim();
+    if (!transcript || (!textOnly && !data.turn_id)) throw new Error("Δεν ακούστηκε κάποιο μήνυμα. Δοκίμασε ξανά.");
+    const box = $("#composer");
+    const draft = textOnly ? [box.value.trim(), transcript].filter(Boolean).join("\n") : transcript;
+    if (draft.length > 4000) throw new Error("Η μεταγραφή μαζί με το μήνυμα ξεπερνά τους 4.000 χαρακτήρες. Συντόμευσε το κείμενο και δοκίμασε ξανά.");
+    state.voiceTurn = textOnly ? null : data.turn_id;
+    box.value = draft; autosize(box); paintCount();
     const shouldSend = state.submitAfterTranscript;
-    state.transcribing = false; state.submitAfterTranscript = false; voiceHint(); paintVoiceControls();
+    state.transcribing = false; state.submitAfterTranscript = false;
+    voiceHint(textOnly ? "Έλεγξε τη μεταγραφή, διόρθωσε αν χρειάζεται και πάτα αποστολή. Η απάντηση θα είναι γραπτή." : undefined, { review: textOnly }); paintVoiceControls();
     if (shouldSend) await send(); else if (!state.voiceOpen) box.focus();
   } catch (error) { if (active()) { state.voiceContinuous = false; state.voiceTurn = null; voiceHint(); toast(error.message, true); } }
   finally { if (active()) { state.transcribing = false; state.submitAfterTranscript = false; paintVoiceControls(); } }

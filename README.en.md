@@ -184,6 +184,7 @@ All people, documents, conversations and accounts shown in the screenshots are f
 - First-person answers grounded only in that person's data; an honest "I don't know", boundaries (health, finances, politics/religion, relationships) and escalation when a decision is above their authority.
 
 ### 3. Text · Voice · Avatar · Voice avatar
+- **Text-mode dictation:** press the microphone, speak, stop, review/edit the transcript and send it as a normal text message. Existing draft text is preserved. This uses ElevenLabs speech-to-text only; it does not generate TTS or start an avatar. The example configuration selects `ELEVENLABS_STT_MODEL=scribe_v3`.
 - **Voice:** with `ELEVENLABS_API_KEY` each person answers in their own ElevenLabs voice (Sophia, Eric, Zenia); the 🎤 transcribes with ElevenLabs Scribe and shows the transcript for review before sending.
 - **Avatar:** with `SIMLI_API_KEY`, a Simli face (Kate, Hank, Zahra) speaks the same answer with lip sync. The server sends the browser a short-lived session token for **one checked answer**, within the local daily budget (`SIMLI_DAILY_SECONDS`). The current Simli subscription supports **one active human-avatar session at a time**. When Simli reports the session is busy, the UI waits once for the previous short answer; if it still cannot start, audio continues without video. The avatar does not stream an open microphone.
 - **Voice avatar:** hands-free conversation: an orb listens, detects the pause, answers aloud and listens again until paused.
