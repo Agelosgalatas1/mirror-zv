@@ -206,6 +206,11 @@ def test_bundled_company_rules_reach_both_managers_and_follow_source_consent():
         assert not answer["explain"]["unsure"] and "renewals" in answer["answer"].lower()
         assert any("Q4 2026" in source["label"] for source in answer["explain"]["sources"])
 
+        overdue = c.post("/api/mirrors/ceo/ask", headers=managers[1],
+                         json={"question": "Τι κάνω με πελάτη που καθυστερεί πληρωμές;"}).json()
+        assert not overdue["explain"]["unsure"] and "30 ημέρες" in overdue["answer"]
+        assert "έλεγχο εξαίρεσης" in overdue["answer"]
+
         assert c.patch(f"/api/sources/{policy_source}", json={"consent": False}, headers=ceo).status_code == 200
         for headers in managers:
             assert not any(t.get("demo_policy") for t in rules(headers))
