@@ -1,0 +1,22 @@
+Message-ID: <FIN-E09.20260914.1612@nexatech.example>
+Date: Mon, 14 Sep 2026 16:12:00 +0300
+From: Μυρτώ Αντωνίου <m.antoniou@nexatech.example>
+To: Αλέξανδρος Πέτρου <a.petrou@nexatech.example>, Ελένη Ράπτη <e.rapti@nexatech.example>
+Subject: Northbridge Hotels — επιβεβαίωση margin & όρων πληρωμής
+MIME-Version: 1.0
+Content-Type: text/plain; charset="UTF-8"
+Content-Transfer-Encoding: 8bit
+X-Synthetic-Data: true
+
+Ελένη, Αλέξανδρε,
+
+Για Northbridge Hotels (καθαρή αξία €28.000 μετά από 11%, 10 POS terminals + 6 tablets + support):
+
+1. Margin: στο draft γράφει 25,4% (εκτίμηση CRM). Με το κόστος παραλαβής Αυγούστου στο ERP βγαίνει 25,1%. Επιβεβαιωμένο: 25%, όχι 25,4%. Διορθώστε το στο approval request.
+2. Έκπτωση 11%: είναι στο >6–12% της SALE-DISC-v2, άρα θέλει την έγκριση του Αλέξανδρου. Δεν τη βλέπω ακόμα στο ApprovalFlow.
+3. Support: στο draft υπάρχουν "έως 6 ώρες δωρεάν support". Με SALE-DISC-v2 πάνω από 4h θέλει έγκριση manager. Αν δεν υπάρχει λόγος, κρατήστε 4h.
+4. Πίστωση: 1 προηγούμενο τιμολόγιο (€3.100, Μάρτιος), πληρώθηκε σε 27 ημέρες. Καμία ληξιπρόθεσμη οφειλή σήμερα. Άρα net30 default με FIN-CREDIT-v2, δεν χρειάζεται Finance review.
+
+Από Finance δεν υπάρχει άλλη εκκρεμότητα.
+
+Μυρτώ

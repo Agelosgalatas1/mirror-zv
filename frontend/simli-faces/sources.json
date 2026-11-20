@@ -1,0 +1,22 @@
+{
+  "attribution": "Simli stock avatar previews; https://docs.simli.com/api-reference/preset-faces",
+  "portraits": [
+    {
+      "name": "Hank",
+      "file": "hank.avif",
+      "source": "https://mintcdn.com/simli/8559oSRutzisF8Ox/images/trinity2/9fcd5739-bf66-49a5-b525-d02d7f0bc2fc.jpg?w=2500&fit=max&auto=format&n=8559oSRutzisF8Ox&q=85&s=2d461696a214baa7ef504ac4648780de",
+      "sha256": "322f70fd1bd206d4bc13fc5cb2d3b70d056b13e5a4929e979b28f922bfd297da"
+    },
+    {
+      "name": "Zahra",
+      "file": "zahra.avif",
+      "source": "https://mintcdn.com/simli/8559oSRutzisF8Ox/images/trinity2/a6d08e06-038a-4b32-84ae-b02e0f0f1140.jpg?w=560&fit=max&auto=format&n=8559oSRutzisF8Ox&q=85&s=2ed65cc429fb94a573cb006aa09cc1dd",
+      "sha256": "ac7cd571df9c9bf7bd25fed12efb1d694e8de5ffe4625ff6b18a51bf4f45ecdf"
+    },
+    {
+      "name": "Kate",
+      "file": "kate.jpg",
+      "source": "https://mintcdn.com/simli/8559oSRutzisF8Ox/images/trinity2/c060fe44-9b14-43e8-b92c-83a0e230db11.jpg (resized to 560px)"
+    }
+  ]
+}

@@ -1,0 +1,32 @@
+Message-ID: <FIN-E01.20260107.0914@nexatech.example>
+Date: Wed, 07 Jan 2026 09:14:00 +0200
+From: Μυρτώ Αντωνίου <m.antoniou@nexatech.example>
+To: Αλέξανδρος Πέτρου <a.petrou@nexatech.example>, Ελένη Ράπτη <e.rapti@nexatech.example>, Νίκος Ζήσης <n.zisis@nexatech.example>
+Cc: Δανάη Καρρά <d.karra@nexatech.example>
+Subject: FIN-CREDIT-v1 σε ισχύ από 06/01 — τι αλλάζει στην πράξη
+MIME-Version: 1.0
+Content-Type: text/plain; charset="UTF-8"
+Content-Transfer-Encoding: 8bit
+X-Synthetic-Data: true
+
+Καλημέρα σε όλους,
+
+Από χθες (06/01/2026) ισχύει η πιστωτική πολιτική FIN-CREDIT-v1. Το πλήρες κείμενο είναι στο shared drive (Finance > Policies). Συνοπτικά, για τις προσφορές που ετοιμάζετε:
+
+1. Default όρος πληρωμής: net30. Δεν χρειάζεται έγκριση Finance.
+2. net45 ή net60: περνά από Finance review πριν φύγει οποιαδήποτε δεσμευτική προσφορά. Στείλτε μου αίτημα στο ApprovalFlow, όχι μόνο Teams.
+3. net90: μόνο με έγκριση CEO. Εγώ δίνω εισήγηση, η απόφαση είναι της Δανάης.
+4. Για κάθε αίτημα πέραν του net30 χρειάζομαι: (α) ιστορικό πληρωμών πελάτη, (β) τρέχον ανοιχτό υπόλοιπο (exposure), (γ) εκτιμώμενη ημερομηνία είσπραξης.
+
+Δύο διευκρινίσεις γιατί έχουν ήδη ρωτήσει:
+- Η πολιτική εκπτώσεων (SALE-DISC-v1) είναι ξεχωριστή και την εγκρίνει ο Αλέξανδρος / η Δανάη ανά κλίμακα. Εγώ ελέγχω μόνο αν το margin που δηλώνεται συμφωνεί με το ERP.
+- Οι πελάτες με ήδη υπογεγραμμένα συμβόλαια κρατάνε τους όρους τους μέχρι τη λήξη.
+
+Αν κάτι δεν είναι ξεκάθαρο, καλύτερα να το δούμε πριν φύγει η προσφορά και όχι μετά.
+
+Ευχαριστώ,
+Μυρτώ
+
+--
+Μυρτώ Αντωνίου | Finance Manager | NexaTech Solutions
+m.antoniou@nexatech.example

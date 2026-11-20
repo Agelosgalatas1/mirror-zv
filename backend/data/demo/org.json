@@ -1,0 +1,21 @@
+{
+  "company": "NexaTech Solutions",
+  "note": "Synthetic organisation for the Netcompany Hackathon Athens 2026 (datasets from the team's ZV repo). No real personal data.",
+  "persons": [
+    {"id": "ceo", "name": "Δανάη Καρρά", "display_name": "Δανάη", "role": "CEO, NexaTech Solutions", "department": "executive",
+     "reports_to": null,
+     "aliases": ["Δανάη Καρρά", "Δανάη", "Danai Karra", "Danai", "ΔΚ", "Δ.Κ."],
+     "emails": ["d.karra@nexatech.example"], "org_domain": "nexatech.example",
+     "login": {"username": "ceo", "email": "d.karra@nexatech.example", "password": "ceo2026"}},
+    {"id": "sales", "name": "Αλέξανδρος Πέτρου", "display_name": "Αλέξανδρος", "role": "Sales Manager, NexaTech Solutions",
+     "department": "sales", "reports_to": "ceo",
+     "aliases": ["Αλέξανδρος Πέτρου", "Αλέξανδρος", "Alexandros Petrou", "Alexandros", "ΑΠ", "Α.Π."],
+     "emails": ["a.petrou@nexatech.example"], "org_domain": "nexatech.example",
+     "login": {"username": "sales_manager", "email": "a.petrou@nexatech.example", "password": "sales2026"}},
+    {"id": "finance", "name": "Μυρτώ Αντωνίου", "display_name": "Μυρτώ", "role": "Finance Manager, NexaTech Solutions",
+     "department": "finance", "reports_to": "ceo",
+     "aliases": ["Μυρτώ Αντωνίου", "Μυρτώ", "Myrto Antoniou", "Myrto", "ΜΑ", "Μ.Α."],
+     "emails": ["m.antoniou@nexatech.example"], "org_domain": "nexatech.example",
+     "login": {"username": "finance_manager", "email": "m.antoniou@nexatech.example", "password": "finance2026"}}
+  ]
+}

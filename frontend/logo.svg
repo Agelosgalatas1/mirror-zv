@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="MIRROR">
+  <defs>
+    <linearGradient id="m" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#c7b3ff"/>
+      <stop offset="1" stop-color="#5ee6c5"/>
+    </linearGradient>
+    <linearGradient id="r" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#5ee6c5" stop-opacity=".55"/>
+      <stop offset="1" stop-color="#5ee6c5" stop-opacity="0"/>
+    </linearGradient>
+    <linearGradient id="edge" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#c7b3ff" stop-opacity=".55"/>
+      <stop offset="1" stop-color="#5ee6c5" stop-opacity=".25"/>
+    </linearGradient>
+  </defs>
+  <rect x="1" y="1" width="62" height="62" rx="17" fill="#0b0d16" stroke="url(#edge)" stroke-width="1.5"/>
+  <!-- the person: an M made of two peaks (also the hierarchy pyramid) -->
+  <path d="M14 40 L23 18 L32 31 L41 18 L50 40" fill="none" stroke="url(#m)" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+  <!-- the mirror line -->
+  <path d="M11 45.5 H53" stroke="#ffffff" stroke-opacity=".28" stroke-width="1.4" stroke-linecap="round"/>
+  <!-- the reflection: the digital counterpart -->
+  <path d="M14 48.5 L23 56 L32 51.5 L41 56 L50 48.5" fill="none" stroke="url(#r)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

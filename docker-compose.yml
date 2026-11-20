@@ -1,0 +1,48 @@
+# One command: docker compose up --build   ->   http://localhost:8000
+name: mirror
+services:
+  mirror:
+    build: .
+    image: mirror:latest
+    ports:
+      - "${PORT:-8000}:8000"
+    environment:
+      # Pick any (or none, the app then runs with its offline rule-based engine):
+      LLM_PROVIDER: ${LLM_PROVIDER:-auto}          # auto | anthropic | openai | ollama | offline
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      ANTHROPIC_MODEL: ${ANTHROPIC_MODEL:-claude-opus-5-5}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OPENAI_MODEL: ${OPENAI_MODEL:-gpt-5-mini}
+      OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-}
+      # Optional premium voice and avatar (keys stay on the server):
+      ELEVENLABS_API_KEY: ${ELEVENLABS_API_KEY:-}
+      ELEVENLABS_MODEL: ${ELEVENLABS_MODEL:-}
+      ELEVENLABS_STT_MODEL: ${ELEVENLABS_STT_MODEL:-}
+      ELEVENLABS_VOICE_CEO: ${ELEVENLABS_VOICE_CEO:-}
+      ELEVENLABS_VOICE_SALES: ${ELEVENLABS_VOICE_SALES:-}
+      ELEVENLABS_VOICE_FINANCE: ${ELEVENLABS_VOICE_FINANCE:-}
+      ELEVENLABS_MODEL_CEO: ${ELEVENLABS_MODEL_CEO:-}
+      ELEVENLABS_MODEL_SALES: ${ELEVENLABS_MODEL_SALES:-}
+      ELEVENLABS_MODEL_FINANCE: ${ELEVENLABS_MODEL_FINANCE:-}
+      SIMLI_API_KEY: ${SIMLI_API_KEY:-}
+      SIMLI_ENABLED: ${SIMLI_ENABLED:-auto}
+      SIMLI_DAILY_SECONDS: ${SIMLI_DAILY_SECONDS:-600}
+      OLLAMA_MODEL: ${OLLAMA_MODEL:-qwen2.5:7b}
+      AUTO_SEED: ${AUTO_SEED:-true}                # load the synthetic NexaTech demo data (re-seeded when it changes)
+    volumes:
+      - mirror-data:/data
+    restart: unless-stopped
+
+  # Optional fully local LLM (no data leaves the machine):
+  #   docker compose --profile local-llm up --build
+  #   docker compose exec ollama ollama pull qwen2.5:7b
+  #   then set LLM_PROVIDER=ollama and OLLAMA_BASE_URL=http://ollama:11434 in .env
+  ollama:
+    image: ollama/ollama:latest
+    profiles: ["local-llm"]
+    volumes:
+      - ollama-models:/root/.ollama
+
+volumes:
+  mirror-data:
+  ollama-models:
