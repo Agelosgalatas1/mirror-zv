@@ -244,13 +244,6 @@ class AskIn(BaseModel):
     channel: str = "chat_team"
 
 
-@router.get("/mirrors/{mid}/suggestions")
-def suggestions(mid: str, user: dict = Depends(current_user)):
-    guard(user, mid)
-    with as_person(mid):
-        return {"questions": twin.suggested_questions()}
-
-
 # Επεξήγηση: Χρησιμοποιεί το επιτρεπόμενο ιστορικό και καταγράφει το νέο ζεύγος ερώτησης και απάντησης.
 def answer_in_conversation(user: dict, mid: str, question: str, cid: str | None, channel: str = "chat_team") -> dict:
     """Ask the twin inside a saved conversation (its history gives context to follow-ups) and store the turn."""
@@ -261,7 +254,6 @@ def answer_in_conversation(user: dict, mid: str, question: str, cid: str | None,
                         (conv["id"],))
         rows = sharing.visible_messages(rows, user['id'], mid)
         history = [{"role": r["role"], "text": r["text"],
-                    "mode": (r["payload"] or {}).get("mode"),
                     "traits": [t["id"] for t in (r["payload"] or {}).get("traits", [])]} for r in reversed(rows)]
     stamp = sharing.access_fingerprint(user['id'], mid)
     with as_person(mid):

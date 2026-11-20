@@ -171,8 +171,6 @@ Open **Self-test** from your own card in the pyramid. Choose a topic, write a qu
 
 Select **Το δικό σου Mirror** (Your own Mirror) in the sidebar to ask questions about your sources and use the knowledge you confirmed in **Self-test**.
 
-A new chat suggests questions with reviewed answers from the available ZV sources or published rules. **100%** on these answers means the Mirror returned the reviewed answer. Open questions are scored based on the evidence found.
-
 ### Demo note
 
 All people, documents, conversations and accounts shown in the screenshots are fictional. MIRROR is a drafting and decision-support demo, not an autonomous decision-maker: inspect the evidence and keep final approvals with a human.

@@ -193,10 +193,8 @@ async function openMirror(mirror, initial = false) {
   state.mirror = mirror; state.view = "chat";
   if (location.hash !== "#/chat/" + mirror.id) location.hash = "#/chat/" + mirror.id;
   state.thread = null; state.messages = [{ role: "loading" }]; state.threads = []; state.busy = true;
-  state.suggestions = [];
   const ctx = conversationContext();
   closeNav(); paintMain(); paintSidebar();
-  loadSuggestions(ctx);
   try {
     state.threads = await api(`/api/mirrors/${mirror.id}/conversations`, undefined, ctx);
     const saved = load(threadKey());
@@ -206,17 +204,6 @@ async function openMirror(mirror, initial = false) {
   } catch (error) { if (currentContext(ctx)) toast(error.message, true); }
   finally {
     if (currentContext(ctx)) { state.busy = false; state.messages = []; paintChat(); }
-  }
-}
-async function loadSuggestions(ctx) {
-  if (!ctx.mirror) return;
-  try {
-    const { questions } = await api("/api/mirrors/" + ctx.mirror + "/suggestions", undefined, ctx);
-    if (!currentContext(ctx)) return;
-    state.suggestions = questions;
-    if (state.messages.length === 0) paintChat();
-  } catch {
-    // The composer remains usable when suggestions are unavailable.
   }
 }
 async function openThread(id) {
@@ -238,9 +225,7 @@ async function openThread(id) {
 function newChat() {
   invalidateConversation();
   if (state.view !== "chat" && state.mirror) { state.view = "chat"; location.hash = "#/chat/" + state.mirror.id; paintMain(); }
-  state.thread = null; state.messages = []; state.suggestions = [];
-  store(threadKey(), null); closeNav(); paintChat(); paintSidebar(); loadAvatar(); $("#composer")?.focus();
-  loadSuggestions(conversationContext());
+  state.thread = null; state.messages = []; store(threadKey(), null); closeNav(); paintChat(); paintSidebar(); loadAvatar(); $("#composer")?.focus();
 }
 // Επεξήγηση: Το Κείμενο ζητά γραπτή απάντηση, ενώ Φωνή και Avatar ενεργοποιούν την ηχητική διαδρομή.
 async function send(text) {
@@ -1074,6 +1059,19 @@ document.addEventListener("keydown", e => {
 let resizeTimer;
 window.addEventListener("resize", () => { clearTimeout(resizeTimer); resizeTimer = setTimeout(() => state.view === "home" && state.redraw && state.redraw(), 120); });
 
+function suggestions() {
+  const target = personFor(state.mirror), dept = (target.department || "").toLowerCase(), me = state.session.user;
+  if (dept === "sales") return me.role_name === "ceo"
+    ? ["Πώς πάει το pipeline αυτό το τρίμηνο;", "Ποια deal σε ανησυχούν;", "Πώς χειρίζεσαι πελάτη που ζητά μεγάλη έκπτωση;", "Τι χρειάζεσαι από μένα;"]
+    : ["Ποιος εγκρίνει έκπτωση 8%;", "Ένας πελάτης ζητά μεγαλύτερη έκπτωση. Τι του λέω;", "Τι να προσέξω πριν στείλω μια προσφορά;", "Πώς θα το έλεγες εσύ σε έναν πελάτη;"];
+  if (dept === "finance") return me.role_name === "ceo"
+    ? ["Πώς είναι οι εισπράξεις;", "Ποιοι πελάτες καθυστερούν πληρωμές;", "Τι ρίσκο βλέπεις στα πιστωτικά όρια;", "Τι χρειάζεσαι από μένα;"]
+    : ["Πότε δίνουμε net45 ή net60;", "Τι χρειάζεται για έγκριση όρων πληρωμής;", "Πελάτης με καθυστερημένο τιμολόγιο ζητά νέα παραγγελία. Τι κάνω;", "Πώς θα το εξηγούσες σε έναν πελάτη;"];
+  const role = me.role_name;
+  if (role.endsWith("_employee")) return ["Ποιος εγκρίνει έκπτωση 8%;", "Ένας πελάτης ζητά μεγαλύτερη έκπτωση. Τι του λέω;", "Τι να προσέξω πριν στείλω μια προσφορά;", "Πώς θα το έλεγες εσύ σε έναν πελάτη;"];
+  if (role === "ceo") return ["Πώς θα απαντούσα σε πελάτη που ζητά αποκλειστικότητα;", "Ποιος εγκρίνει έκπτωση 13%;", "Τι είναι προτεραιότητα αυτό το τρίμηνο;", "Πώς θα έγραφα ένα σύντομο email άρνησης;"];
+  return ["Ποιος εγκρίνει έκπτωση 11%;", "Πώς βλέπεις ένα pilot αντί για αποκλειστικότητα;", "Τι κάνω με πελάτη που καθυστερεί πληρωμές;", "Τι είναι προτεραιότητα αυτό το τρίμηνο;"];
+}
 /* ---------- answers: confidence, evidence chips and actions inside the answer (as in the earlier MIRROR chat) ---------- */
 function showEvidence(x, p, focus) {
   showOverlay(done => {
@@ -1135,11 +1133,7 @@ function paintFollowups() {
   const show = !state.busy && lastMsg?.role === "ai" && !lastMsg.explain?.boundary;
   box.hidden = !show; if (!show) { fill(box); return; }
   const q = [...state.messages].reverse().find(m => m.role === "user")?.text || "";
-  const followups = lastMsg.explain?.mode === "verified"
-    ? (q === "γιατί;" ? [] : ["γιατί;"])
-    : ["γιατί;", "και τι άλλο;", q ? "Πώς θα το έλεγες σε πελάτη;" : null].filter(Boolean);
-  box.hidden = followups.length === 0;
-  fill(box, followups
+  fill(box, ["γιατί;", "και τι άλλο;", q ? "Πώς θα το έλεγες σε πελάτη;" : null].filter(Boolean)
     .map(f => h("button", { type: "button", class: "chip chip-btn", onclick: () => send(f) }, f)));
 }
 function paintCount() {
@@ -1161,7 +1155,7 @@ function paintChat() {
     fill(list, h("div", { class: "welcome" }, avatar(p, "lg", true),
       h("h2", {}, new Date().getHours() < 12 ? "Καλημέρα!" : "Καλησπέρα!"),
       h("p", {}, `Είσαι σε συνομιλία με το AI αντίγραφο του προσώπου «${p.name}». Ρώτα ό,τι θα ρωτούσες κι από κοντά, και μετά ρώτα «γιατί;» για να δεις από πού το ξέρει.`),
-      h("div", { class: "ideas" }, (state.suggestions || []).map(q => h("button", { onclick: () => send(q) }, q)))));
+      h("div", { class: "ideas" }, suggestions().map(q => h("button", { onclick: () => send(q) }, q)))));
     return;
   }
   const last = state.messages.length - 1;

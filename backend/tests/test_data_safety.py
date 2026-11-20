@@ -108,30 +108,6 @@ def test_publication_is_opt_in_owner_only_and_tied_to_review():
         assert not inherited(c,hs)
 
 
-def test_chat_suggestions_follow_rule_publication():
-    with TestClient(app) as c:
-        owner = login(c)
-        viewer = login(c, 'sales_manager', 'sales2026')
-        base = '/api/mirrors/ceo'
-        questions = c.get(base + '/suggestions', headers=viewer).json()['questions']
-        assert questions and all('προτεραιότητα' not in question for question in questions)
-        for question in questions:
-            result = c.post(base + '/ask', headers=viewer, json={'question': question}).json()
-            assert result['explain']['confidence'] == 1.0
-            assert not result['explain']['sources']
-
-        rule = add(c, owner, 'Εταιρικός κανόνας δοκιμής για pilot χωρίς αποκλειστικότητα.')
-        publish(c, owner, rule)
-        question = c.get(base + '/suggestions', headers=viewer).json()['questions'][0]
-        assert 'δημοσιευμένος κανόνας' in question
-        result = c.post(base + '/ask', headers=viewer, json={'question': question}).json()
-        assert result['explain']['confidence'] == 1.0
-        assert result['explain']['traits'] and not result['explain']['sources']
-        assert c.post(f'/api/profile/traits/{rule}/publication', headers=owner,
-                      json={'published': False}).status_code == 200
-        assert question not in c.get(base + '/suggestions', headers=viewer).json()['questions']
-
-
 def test_unlabelled_personal_and_model_approved_flags_never_publish():
     with TestClient(app) as c:
         hc=login(c);hs=login(c,'sales_manager','sales2026')
