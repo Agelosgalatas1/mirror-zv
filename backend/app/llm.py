@@ -1,3 +1,4 @@
+# Επεξήγηση: Κοινός χειρισμός παρόχων AI, δομημένων απαντήσεων και προαιρετικών embeddings.
 """Provider-agnostic LLM access: Anthropic Claude, OpenAI, Ollama or offline.
 
 Every call asks for a JSON object back. The rest of the system works on
@@ -208,6 +209,7 @@ class LLM:
         }
 
     # ------------------------------------------------------------ completion
+    # Επεξήγηση: Ζητά δομημένη απάντηση ώστε τα υπόλοιπα μέρη να επεξεργάζονται κοινή μορφή.
     def json(self, system: str, user: str, *, max_tokens: int = 4000, effort: str = "low") -> dict:
         if not self.available:
             raise LLMUnavailable("offline")
@@ -295,6 +297,7 @@ class LLM:
     def embeddings_available(self) -> bool:
         return bool(settings.use_embeddings and self.keys["openai"])
 
+    # Επεξήγηση: Αν τα embeddings αποτύχουν, η αναζήτηση συνεχίζει με BM25.
     def embed(self, texts: list[str]) -> list[np.ndarray] | None:
         if not self.embeddings_available or not texts:
             return None

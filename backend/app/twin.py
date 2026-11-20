@@ -1,3 +1,4 @@
+# Επεξήγηση: Παράγει απαντήσεις, προσχέδια και προτάσεις αποφάσεων με το επιτρεπόμενο προφίλ και τα σχετικά τεκμήρια.
 """The twin itself: Ask, Write and Decide, each returning an explanation.
 
 Every answer comes back with the traits and memories it relied on, a
@@ -73,6 +74,7 @@ def _query_vec(text: str):
     return v[0] if v else None
 
 
+# Επεξήγηση: Η πρόσβαση σε ιδιωτικές μνήμες μπλοκάρεται για ξένο χρήστη.
 def memories(query: str, k: int = 8) -> list[Hit]:
     if sharing.restricted():
         return []
@@ -126,6 +128,7 @@ def _boundaries() -> list[dict]:
     return db.get_setting("boundaries", DEFAULT_BOUNDARIES)
 
 
+# Επεξήγηση: Μετατρέπει τις αναφορές του AI σε πραγματικά διαθέσιμα τεκμήρια.
 def _resolve_refs(out: dict, prof: dict, hits: list[Hit]) -> dict:
     tindex = trait_index(prof)
     traits = []
@@ -626,6 +629,7 @@ def _format_history(history: list[dict] | None) -> str:
     return "\n".join(lines) or "(new conversation)"
 
 
+# Επεξήγηση: Απαντά με προφίλ, σχετικά αποσπάσματα και ιστορικό· διαθέτει και offline διαδρομή.
 def ask(question: str, channel: str = "chat_team", *, log: bool = True, history: list[dict] | None = None) -> dict:
     prof = _profile()
     owner = get_owner()
@@ -669,6 +673,7 @@ def ask(question: str, channel: str = "chat_team", *, log: bool = True, history:
     return res
 
 
+# Επεξήγηση: Προτείνει επιλογή και αιτιολόγηση· δεν εκτελεί επιχειρηματική έγκριση.
 def decide(situation: str, options: list[str], *, log: bool = True) -> dict:
     prof = _profile()
     owner = get_owner()
@@ -718,6 +723,7 @@ def decide(situation: str, options: list[str], *, log: bool = True) -> dict:
     return res
 
 
+# Επεξήγηση: Συντάσσει προσχέδιο με το ύφος του προσώπου και ελεγχόμενες αναφορές.
 def write(incoming: str, channel: str = "email_external", audience: str = "", instructions: str = "",
           *, critique: bool = True, log: bool = True, queue: bool = True) -> dict:
     prof = _profile()

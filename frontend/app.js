@@ -1,3 +1,4 @@
+/* Επεξήγηση: Χειρίζεται οθόνες, συνομιλίες και ήχο· γνώση, δικαιώματα και κληρονομικότητα αποφασίζονται στον server. */
 /* MIRROR — chat with the AI counterpart of a colleague. Everything behind the
    conversation (knowledge, inheritance, approvals, learning) stays on the server. */
 "use strict";
@@ -60,6 +61,7 @@ let avatarRequest = 0, recordingRequest = 0, playbackRequest = 0;
 let overlayCloser = null;
 const conversationContext = () => ({ signal: conversationController.signal, session: state.session, mirror: state.mirror?.id });
 const currentContext = ctx => !ctx.signal.aborted && ctx.session === state.session && ctx.mirror === state.mirror?.id;
+// Επεξήγηση: Ακυρώνει παλιά αιτήματα και σταματά μικρόφωνο και ήχο κατά την αλλαγή συζήτησης.
 function invalidateConversation() {
   dismissOverlay();
   conversationController.abort(); conversationController = new AbortController();
@@ -88,6 +90,7 @@ function withdrawMirror(mid) {
   location.hash = "#/"; render();
   toast("Η πρόσβαση σε αυτό το Mirror δεν είναι πλέον διαθέσιμη.", true);
 }
+// Επεξήγηση: Κοινή επικοινωνία με το API, με συνεδρία χρήστη και χειρισμό σφαλμάτων.
 async function api(path, body, ctx) {
   const initiatingSession = state.session;
   const opts = { credentials: "same-origin", headers: {}, signal: ctx?.signal };
@@ -188,6 +191,7 @@ window.addEventListener("hashchange", () => {
   }
   else if (state.view !== "home") goHome();
 });
+// Επεξήγηση: Ανοίγει μόνο Mirror που επέστρεψε ως διαθέσιμο ο server.
 async function openMirror(mirror, initial = false) {
   const switching = state.mirror?.id !== mirror.id || state.view !== "chat";
   if (!switching && !initial) { closeNav(); return; }
@@ -229,6 +233,7 @@ function newChat() {
   if (state.view !== "chat" && state.mirror) { state.view = "chat"; location.hash = "#/chat/" + state.mirror.id; paintMain(); }
   state.thread = null; state.messages = []; store(threadKey(), null); closeNav(); paintChat(); paintSidebar(); loadAvatar(); $("#composer")?.focus();
 }
+// Επεξήγηση: Το Κείμενο ζητά γραπτή απάντηση, ενώ Φωνή και Avatar ενεργοποιούν την ηχητική διαδρομή.
 async function send(text) {
   // Send is also the finish button for dictation. Lock the hand-off before any
   // await so a second click cannot create another turn or send an old draft.
@@ -299,6 +304,7 @@ function render() {
     h("main", { class: "main-area", id: "main" })));
   paintSidebar(); paintMain();
 }
+// Επεξήγηση: Χτίζει τη συνομιλία, το πεδίο μηνύματος και τα προαιρετικά χειριστήρια ήχου.
 function paintMain() {
   const main = $("#main"); if (!main) return;
   if (state.view === "home") { fill(main, homeView()); return; }
@@ -420,6 +426,7 @@ async function lookFor(mid, ctx) {
 /* Text is the default after sign-in or reload; voice and human avatar are explicit choices that then
    stay selected for new chats, older threads and other Mirrors until another button or sign-out. */
 function mode() { return state.mode || "text"; }
+// Επεξήγηση: Η αλλαγή τρόπου απάντησης ακυρώνει εκκρεμή ηχογράφηση πριν συνεχίσει.
 function setMode(next) {
   if (!["voice", "avatar", "text"].includes(next)) return;
   if (next === mode()) return;  // the selected reply button stays selected; another button changes it
@@ -456,6 +463,7 @@ function unlockVoiceAudio() {
     voiceAudioContext.resume().catch(() => {});
   } catch { /* Audio playback still works without the visual meter. */ }
 }
+// Επεξήγηση: Η συνεχής φωνητική συνομιλία ξεκινά μόνο μετά από επιλογή του χρήστη.
 function openVoice() {
   if (mode() !== "voice") setMode("voice");
   state.voiceOpen = true; unlockVoiceAudio(); paintVoiceControls();
@@ -479,6 +487,7 @@ function pauseVoice() {
 function orbLevel(level) {
   $("#voice-orb")?.style.setProperty("--level", reduceMotion ? 0 : Math.min(1, level).toFixed(3));
 }
+// Επεξήγηση: Συγχρονίζει κουμπιά και ενδείξεις με ηχογράφηση, μεταγραφή και αναμονή απάντησης.
 function paintVoiceControls() {
   document.querySelectorAll("#mode-switch [data-mode]").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.mode === mode())));
   $("#mode-switch")?.setAttribute("data-mode", mode());
@@ -537,6 +546,7 @@ function meterPlayback(audio) {
     }; tick();
   } catch { /* Keep the voice playable even without an amplitude meter. */ }
 }
+// Επεξήγηση: Διακόπτει αναπαραγωγή και καθαρίζει τους προσωρινούς πόρους ήχου.
 function stopVoice({ keepAvatar = false } = {}) {
   const frame = $("#avatar-frame");
   if (frame && !keepAvatar) { frame.contentWindow?.postMessage("mirror:stop",location.origin); frame.src="about:blank"; }
@@ -591,6 +601,7 @@ async function playVoice(turn, keepAvatar = false) {
     await audio.play().catch(() => { if (currentContext(ctx) && state.audio === audio) { state.voiceContinuous = false; stopVoice({ keepAvatar }); toast("Πάτα 🔊 στην απάντηση για να την ακούσεις."); } });
   } catch { if (currentContext(ctx) && request === playbackRequest) { state.voiceContinuous = false; paintVoiceControls(); toast("Η φωνή δεν είναι διαθέσιμη για αυτή την απάντηση.", true); } }
 }
+// Επεξήγηση: Στο Κείμενο παραμένει διαθέσιμη η υπαγόρευση, χωρίς φόρτωση βίντεο.
 async function loadAvatar(turn) {
   const ctx = conversationContext(), mid = ctx.mirror, request = ++avatarRequest; if (!mid) return;
   const panel = $("#avatar-panel"), frame = $("#avatar-frame");
@@ -639,6 +650,7 @@ function voiceHint(text, opts = {}) {
   fill(el, opts.rec ? h("i", { class: "rec-dot" }) : icon(I.mic, 14), h("span", {}, text),
     state.voiceTurn || opts.review || opts.rec || state.transcribing ? h("button", { type: "button", onclick: () => { if (state.rec || state.transcribing || state.micPending) stopRecord(true); state.voiceTurn = null; const c = $("#composer"); if (c && !opts.rec) { c.value = ""; autosize(c); } voiceHint(); } }, "Ακύρωση") : null);
 }
+// Επεξήγηση: Ζητά μικρόφωνο μόνο με πάτημα και συλλέγει προσωρινά τον ήχο.
 async function toggleRecord() {
   if (state.rec) return stopRecord(false, state.voiceOpen);
   if (state.busy || state.transcribing || state.micPending || !state.session || state.view !== "chat") return;
@@ -682,6 +694,7 @@ async function toggleRecord() {
     if (currentContext(ctx) && request === recordingRequest) { state.voiceContinuous = false; toast("Δεν δόθηκε πρόσβαση στο μικρόφωνο.", true); }
   } finally { if (currentContext(ctx) && request === recordingRequest) { state.micPending = false; paintVoiceControls(); } }
 }
+// Επεξήγηση: Σταματά το μικρόφωνο και ελέγχει ότι η μεταγραφή αφορά ακόμη την τρέχουσα συζήτηση.
 async function stopRecord(cancel = false, submit = false) {
   const request = ++recordingRequest;
   state.micPending = false;
@@ -731,6 +744,7 @@ async function stopRecord(cancel = false, submit = false) {
   } catch (error) { if (active()) { state.voiceContinuous = false; state.voiceTurn = null; voiceHint(); toast(error.message, true); } }
   finally { if (active()) { state.transcribing = false; state.submitAfterTranscript = false; paintVoiceControls(); } }
 }
+// Επεξήγηση: Κωδικοποιεί τα δείγματα μικροφώνου σε WAV για τον server.
 function encodeWav(samples, rate) {
   const buffer = new ArrayBuffer(44 + samples.length * 2), v = new DataView(buffer);
   const tag = (o, t) => { for (let i = 0; i < t.length; i++) v.setUint8(o + i, t.charCodeAt(i)); };
@@ -769,6 +783,7 @@ const REASONS = {
 };
 const silentEmployeeAccess = p => p.reason === "not_permitted" && ["sales_employee", "finance_employee"].includes(p.role_name);
 const personNote = p => silentEmployeeAccess(p) ? "" : p.can_chat ? RELATIONS[p.relation] || "Διαθέσιμο για συνομιλία" : REASONS[p.reason] || REASONS.not_permitted;
+// Επεξήγηση: Η οθόνη συγκρίνει ανθρώπινη απάντηση με AI και παρέχει χωριστή έγκριση εταιρικών κανόνων.
 async function startSelfTest() {
   let initial;
   try { initial = await api("/api/self-test"); }
@@ -1141,6 +1156,7 @@ function editQuestion(text) {
   box.value = text; autosize(box); paintCount(); box.focus(); box.setSelectionRange(text.length, text.length);
   toast("Διόρθωσε την ερώτηση και πάτα Enter.");
 }
+// Επεξήγηση: Αποδίδει το ιστορικό ως κείμενο μαζί με εξηγήσεις και διαθέσιμες ενέργειες.
 function paintChat() {
   const list = $("#messages"); if (!list) return;
   paintVoiceControls();
@@ -1228,6 +1244,7 @@ function confirmBox(title, text) {
 }
 function closeNav() { $("#app")?.classList.remove("nav-open"); }
 function toggleTheme() { const r = document.documentElement; r.dataset.theme = r.dataset.theme === "light" ? "dark" : "light"; store("mirror-theme", r.dataset.theme); $(".menu")?.classList.remove("on"); }
+// Επεξήγηση: Η αποσύνδεση κλείνει τη συνεδρία και ακυρώνει τους ενεργούς πόρους της διεπαφής.
 async function logout() {
   const session = state.session;
   $(".menu")?.classList.remove("on");

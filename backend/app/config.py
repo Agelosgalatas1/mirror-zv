@@ -1,3 +1,4 @@
+# Επεξήγηση: Φορτώνει τις ρυθμίσεις εκκίνησης από το περιβάλλον, χωρίς αποθήκευση κλειδιών στον κώδικα.
 """Runtime configuration, read once from environment variables."""
 from __future__ import annotations
 

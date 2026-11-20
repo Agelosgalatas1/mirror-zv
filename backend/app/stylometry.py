@@ -1,3 +1,4 @@
+# Επεξήγηση: Υπολογίζει μετρήσιμα στοιχεία ύφους από τα κείμενα του ίδιου του προσώπου.
 """Deterministic stylometry: a measurable writing fingerprint per channel.
 
 The LLM never decides what "sounds like Eleni". These numbers do: they are
@@ -180,6 +181,7 @@ def channel_profile(texts: list[str], background: list[str] | None = None) -> di
     }
 
 
+# Επεξήγηση: Το ύφος υπολογίζεται ανά κανάλι από τα γραπτά του κατόχου.
 def build_style(owner_items: Iterable[dict], other_items: Iterable[dict] = ()) -> dict:
     by_channel: dict[str, list[str]] = {}
     for it in owner_items:
@@ -195,6 +197,7 @@ def build_style(owner_items: Iterable[dict], other_items: Iterable[dict] = ()) -
     }
 
 
+# Επεξήγηση: Συγκρίνει μετρήσεις ύφους· δεν αποτελεί απόδειξη ανθρώπινης ταυτότητας.
 def similarity(text: str, channel_style: dict) -> float:
     """0-100: how close a text's fingerprint is to the owner's channel fingerprint."""
     if not channel_style or not text.strip():

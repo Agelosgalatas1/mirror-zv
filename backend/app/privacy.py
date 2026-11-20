@@ -1,3 +1,4 @@
+# Επεξήγηση: Εντοπίζει υποστηριζόμενα προσωπικά στοιχεία και εφαρμόζει τα όρια θεμάτων του κατόχου.
 """Privacy layer: PII redaction at ingestion and owner-defined boundaries.
 
 Redaction runs *before* anything is stored or sent to an LLM. Detectors are
@@ -65,6 +66,7 @@ class Redaction:
     counts: Counter
 
 
+# Επεξήγηση: Αντικαθιστά τα αναγνωρισμένα ευαίσθητα μοτίβα πριν από αποθήκευση και χρήση από AI.
 def redact(text: str) -> Redaction:
     counts: Counter = Counter()
 
@@ -129,6 +131,7 @@ def _fold(s: str) -> str:
     return "".join(c for c in s if unicodedata.category(c) != "Mn")
 
 
+# Επεξήγηση: Εντοπίζει ερωτήσεις που εμπίπτουν στα προστατευμένα θέματα.
 def check_boundaries(text: str, boundaries: list[dict]) -> dict | None:
     folded = _fold(text)
     for b in boundaries:

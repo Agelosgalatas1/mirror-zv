@@ -1,3 +1,4 @@
+# Επεξήγηση: Κεντρική εκκίνηση FastAPI, διαδρομές API και σερβίρισμα της διεπαφής.
 """MIRROR API + static frontend.
 
 Organisation: a CEO and two managers (Sales, Finance) who report only to the CEO.
@@ -35,6 +36,7 @@ log = logging.getLogger("mirror")
 MAX_UPLOAD = 25 * 1024 * 1024
 
 
+# Επεξήγηση: Φορτώνει αρχικό προφίλ μόνο όταν λείπει· δεν αντικαθιστά υπάρχουσα περσόνα.
 def _ensure_profile() -> None:
     """Make sure the current person has a persona model (shipped snapshot, or heuristic)."""
     latest = profile.latest()
@@ -61,6 +63,7 @@ def demo_fingerprint() -> str:
     return h.hexdigest()[:16]
 
 
+# Επεξήγηση: Η αυτόματη αρχικοποίηση αφορά κενή βάση· οι ενημερώσεις δεν σβήνουν υπάρχοντα δεδομένα.
 def bootstrap() -> None:
     db.connect()
     fingerprint = demo_fingerprint()
@@ -223,6 +226,7 @@ def list_sources():
     return {"sources": db.query("SELECT * FROM sources WHERE person_id=? ORDER BY added_at", (pid(),))}
 
 
+# Επεξήγηση: Παραλαμβάνει ένα αρχείο και το περνά στη ροή εισαγωγής.
 @api.post("/sources")
 async def upload(file: UploadFile = File(...)):
     data = await file.read()
@@ -272,6 +276,7 @@ class ResetDemoIn(BaseModel):
     confirmation: str
 
 
+# Επεξήγηση: Απαιτεί αρμόδιο κάτοχο, ρητή επιβεβαίωση και backup πριν από το reset.
 @api.post("/reset-demo")
 def reset_demo(body: ResetDemoIn, user: dict = Depends(current_user)):
     if user.get("reports_to") or not has_ai(user["id"]):
@@ -321,6 +326,7 @@ def profile_diff(a: int, b: int):
     return profile.diff(va["profile"], vb["profile"])
 
 
+# Επεξήγηση: Η ανακατασκευή προφίλ εκτελείται ως εργασία, όχι ως εκπαίδευση βαρών του μοντέλου.
 @api.post("/profile/build")
 def build_profile():
     def work(progress):
@@ -358,6 +364,7 @@ class PublicationIn(BaseModel):
     content_hash: str | None = Field(default=None, max_length=64)
 
 
+# Επεξήγηση: Η έγκριση αποθηκεύεται χωριστά από τις προτάσεις του AI.
 @api.post("/profile/traits/{tid}/publication")
 def publish_trait(tid: str, body: PublicationIn, user: dict = Depends(current_user)):
     try:
@@ -569,6 +576,7 @@ def voice_speak(body: SpeakIn, user: dict = Depends(current_user)):
     return Response(content=wav, media_type="audio/wav", headers={"Cache-Control": "no-store"})
 
 
+# Επεξήγηση: Επιστρέφει μόνο τη μεταγραφή· δεν ζητά απάντηση AI, σύνθεση φωνής ή avatar.
 @api.post("/voice/transcribe")
 async def voice_transcribe(request: Request):
     audio = await request.body()

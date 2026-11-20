@@ -1,3 +1,4 @@
+# Επεξήγηση: Συνδέει τη διεπαφή με τον υπάρχοντα μηχανισμό απαντήσεων και τους ελέγχους πρόσβασης.
 """The API of the MIRROR web app (the team's ZV frontend), on top of the MIRROR twin engine.
 
 The browser only ever sees conversations: knowledge, inheritance and access rules stay on the
@@ -91,6 +92,7 @@ def explain(res: dict) -> dict:
             "traits": traits, "sources": sources}
 
 
+# Επεξήγηση: Κοινός φραγμός πρόσβασης για όλες τις λειτουργίες ενός Mirror.
 def guard(user: dict, mid: str) -> str:
     if mid not in {m["id"] for m in chat_mirrors(user)}:
         raise MirrorAccess(mid)
@@ -133,6 +135,7 @@ def hierarchy(user: dict = Depends(current_user)):
 
 # ------------------------------------------------------------------ conversations
 
+# Επεξήγηση: Επιβεβαιώνει ότι η συζήτηση ανήκει στον συγκεκριμένο χρήστη και στόχο.
 def _conversation(user: dict, mid: str, cid: str) -> dict:
     try:
         n = int(cid)
@@ -239,6 +242,7 @@ class AskIn(BaseModel):
     channel: str = "chat_team"
 
 
+# Επεξήγηση: Χρησιμοποιεί το επιτρεπόμενο ιστορικό και καταγράφει το νέο ζεύγος ερώτησης και απάντησης.
 def answer_in_conversation(user: dict, mid: str, question: str, cid: str | None, channel: str = "chat_team") -> dict:
     """Ask the twin inside a saved conversation (its history gives context to follow-ups) and store the turn."""
     conv = _conversation(user, mid, cid) if cid else None
@@ -290,6 +294,7 @@ def _speak_into(turn_id: str, answer: str, mid: str) -> bool:
     return True
 
 
+# Επεξήγηση: Προσθέτει ήχο στην ίδια διαδρομή απάντησης του chat.
 @router.post("/mirrors/{mid}/spoken-ask")
 def spoken_ask(mid: str, body: AskIn, user: dict = Depends(current_user)):
     guard(user, mid)
@@ -325,6 +330,7 @@ def avatar(mid: str, user: dict = Depends(current_user)):
             "face_name": voice.FACE_NAMES.get(mid, "")}
 
 
+# Επεξήγηση: Ελέγχει ιδιοκτησία, διάρκεια ισχύος, συζήτηση και τρέχουσες εγκρίσεις του ήχου.
 def _turn(user: dict, tid: str) -> dict:
     if not re.fullmatch(r"[0-9a-f]{32}", tid or ""):
         raise HTTPException(404, "Η φωνητική απάντηση δεν βρέθηκε.")
@@ -340,6 +346,7 @@ def _turn(user: dict, tid: str) -> dict:
     return row
 
 
+# Επεξήγηση: Δημιουργεί μεταγραφή για έλεγχο· η αποστολή γίνεται με χωριστή επιβεβαίωση.
 @router.post("/mirrors/{mid}/voice")
 async def transcribe(mid: str, request: Request, conversation_id: str | None = None,
                      user: dict = Depends(current_user)):
@@ -357,6 +364,7 @@ async def transcribe(mid: str, request: Request, conversation_id: str | None = N
     return {"turn_id": turn_id, "transcript": text}
 
 
+# Επεξήγηση: Η διορθωμένη μεταγραφή γίνεται ερώτηση και παράγεται φωνητική απάντηση.
 @router.post("/voice/{tid}/confirm")
 def confirm(tid: str, body: dict, user: dict = Depends(current_user)):
     row = _turn(user, tid)
@@ -393,6 +401,7 @@ def voice_audio(tid: str, user: dict = Depends(current_user)):
 _LEASES: dict[str, dict] = {}
 
 
+# Επεξήγηση: Εκδίδει προσωρινή συνεδρία για τον ήχο της συγκεκριμένης συζήτησης.
 @router.post("/voice/{tid}/simli")
 def simli_session(tid: str, body: dict, user: dict = Depends(current_user)):
     row = _turn(user, tid)
@@ -412,6 +421,7 @@ def simli_session(tid: str, body: dict, user: dict = Depends(current_user)):
             "max_seconds": sess["max_seconds"], "audio_seconds": round(seconds, 2)}
 
 
+# Επεξήγηση: Επανελέγχει τη συνεδρία ώστε ανάκληση πρόσβασης να σταματά και το avatar.
 @router.get("/voice/{tid}/simli/{lease}")
 def simli_check(tid: str, lease: str, user: dict = Depends(current_user)):
     _turn(user, tid)
@@ -560,6 +570,7 @@ class FeedbackIn(BaseModel):
     correction: str = Field(default="", max_length=2000)
 
 
+# Επεξήγηση: Το feedback και οι διορθώσεις αφορούν το προφίλ του κατόχου, όχι αυτόματη δημοσίευση στην ομάδα.
 @router.post("/self-test/events/{eid}/feedback")
 def self_test_feedback(eid: int, body: FeedbackIn, user: dict = Depends(current_user)):
     e = _event(user, eid)
@@ -577,6 +588,7 @@ def self_test_feedback(eid: int, body: FeedbackIn, user: dict = Depends(current_
     return self_test_state(user)
 
 
+# Επεξήγηση: Αναιρεί συγκεκριμένο feedback με τους ίδιους ελέγχους ιδιοκτησίας.
 @router.post("/self-test/events/{eid}/undo")
 def self_test_undo(eid: int, user: dict = Depends(current_user)):
     e = _event(user, eid)

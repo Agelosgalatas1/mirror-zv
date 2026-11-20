@@ -1,3 +1,4 @@
+# Επεξήγηση: Ταυτοποίηση χρήστη και έλεγχοι πρόσβασης πριν από κάθε προστατευμένο αίτημα.
 """Sessions and access rules shared by every API route.
 
 A session is either an HttpOnly cookie (the web app) or a bearer token (API clients, tests).
@@ -34,6 +35,7 @@ def session_token(request: Request) -> tuple[str, bool]:
     return request.cookies.get(COOKIE, ""), True
 
 
+# Επεξήγηση: Ελέγχει τη συνεδρία και συνδέει το αίτημα με την ταυτότητα του χρήστη.
 async def current_user(request: Request) -> dict:
     """Resolve the session and set the person every following call runs as."""
     token, from_cookie = session_token(request)
@@ -56,11 +58,13 @@ def has_ai(person_id: str) -> bool:
     return bool(row) and (row.get("meta") or {}).get("has_ai", True) is not False
 
 
+# Επεξήγηση: Επιστρέφει τους ανωτέρους που επιτρέπει η οργανωτική ιεραρχία.
 def allowed_targets(person_id: str) -> list[str]:
     """A person can use their own twin and the twins of everyone they report to, nothing sideways."""
     return [p for p in (person_id, *pipeline.ancestors(person_id)) if has_ai(p)]
 
 
+# Επεξήγηση: Απορρίπτει πρόσβαση σε μη επιτρεπόμενο Mirror πριν χρησιμοποιηθούν τα δεδομένα του.
 def check_target(user: dict, target: str | None) -> str:
     target = target or user["id"]
     if target not in allowed_targets(user["id"]):

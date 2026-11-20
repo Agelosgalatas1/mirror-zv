@@ -1,3 +1,4 @@
+# Επεξήγηση: Εκκινεί από το terminal τις μετρήσεις πιστότητας για τα πρόσωπα του demo.
 """Run the fidelity evaluation for every person and print a short table.
 
     docker compose exec mirror python -m tools.evaluate            # with the configured model

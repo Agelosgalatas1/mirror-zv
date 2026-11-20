@@ -1,3 +1,4 @@
+# Επεξήγηση: Οι δοκιμές χρησιμοποιούν προσωρινή βάση και απενεργοποιούν τις εξωτερικές υπηρεσίες που χρεώνουν.
 import os
 import sys
 import tempfile
@@ -17,6 +18,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import pytest
 
 
+# Επεξήγηση: Η έγκριση εδώ αφορά μόνο δεδομένα δοκιμών, ποτέ την κανονική εγκατάσταση.
 @pytest.fixture
 def published_company_rules():
     """Explicit human approvals for the legacy demo behaviour tests, never production seeding."""

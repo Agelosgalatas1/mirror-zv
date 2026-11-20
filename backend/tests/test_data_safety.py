@@ -1,3 +1,4 @@
+# Επεξήγηση: Ελέγχει κυρίως απαγορευμένες προσβάσεις, ανακλήσεις και διατήρηση δεδομένων.
 """Data preservation and negative-path authorisation, entirely offline in disposable DBs."""
 import dataclasses
 import json

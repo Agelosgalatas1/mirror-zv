@@ -1,3 +1,4 @@
+# Επεξήγηση: Χτίζει την περσόνα από τεκμήρια και προσθέτει μόνο τους εγκεκριμένους κληρονομούμενους κανόνες.
 """The persona model: an inspectable, evidence-backed profile of the owner.
 
 Pipeline (LLM mode):  map (extract candidate traits per batch, with item ids
@@ -85,6 +86,7 @@ def _confidence(n_evidence: int, llm_conf: float | None) -> float:
     return round(min(base, 0.97), 2)
 
 
+# Επεξήγηση: Συνδέει χαρακτηριστικά με τεκμήρια και υπολογίζει τα συμπληρωματικά στοιχεία του προφίλ.
 def finalise(raw: dict, method: str, note: str = "") -> dict:
     """Attach ids, resolve evidence, compute confidence, add stylometry + graph."""
     items = {it["id"]: it for it in all_items()}
@@ -208,6 +210,7 @@ def build_with_llm(progress: Callable[[float, str], None] | None = None) -> dict
     return finalise(extract_with_llm(progress), "llm")
 
 
+# Επεξήγηση: Αναλύει τα δεδομένα σε ομάδες και συγχωνεύει τα ευρήματα με τις παραπομπές τους.
 def extract_with_llm(progress: Callable[[float, str], None] | None = None, cache: Path | None = None) -> dict:
     """The merged persona model as the model returned it (evidence still as item ids).
 
@@ -291,6 +294,7 @@ def build_heuristic(note: str = "") -> dict:
     return finalise(raw, "heuristic", note or "Φτιάχτηκε χωρίς LLM. Σύνδεσε ένα μοντέλο AI για πιο πλούσιο προφίλ.")
 
 
+# Επεξήγηση: Φορτώνει το έτοιμο demo προφίλ του σωστού προσώπου.
 def load_snapshot() -> dict | None:
     p = settings.snapshot_dir / f"{pid()}.json"
     if not p.exists():
@@ -318,6 +322,7 @@ def snapshot_hash(raw: bytes | None = None) -> str | None:
 
 # ------------------------------------------------------------------ versions
 
+# Επεξήγηση: Νέα έκδοση που αλλάζει κανόνα ή τεκμήρια ακυρώνει την παλιά έγκρισή του.
 def save_version(profile: dict, method: str, note: str = "") -> int:
     # Discard changed approvals, so reverting/reusing an ID cannot revive them.
     for record in db.query('SELECT * FROM trait_publications WHERE person_id=?', (pid(),)):
@@ -340,6 +345,7 @@ def latest() -> dict | None:
     return prof
 
 
+# Επεξήγηση: Φιλτράρει χαρακτηριστικά που δεν έχουν πλέον διαθέσιμα τεκμήρια ή επιβεβαίωση κατόχου.
 def current() -> dict | None:
     """Latest profile, with evidence filtered to data that still exists and is consented."""
     prof = latest()
@@ -367,6 +373,7 @@ def current() -> dict | None:
 INHERITABLE = ("values", "decision_rules")
 
 
+# Επεξήγηση: Κληρονομούνται μόνο δημοσιευμένοι εταιρικοί κανόνες των ανωτέρων.
 def inherited_traits(person_id: str | None = None) -> list[dict]:
     """Company values and decision rules inherited from everyone above this person, closest manager first.
 
@@ -398,6 +405,7 @@ def with_inheritance(prof: dict) -> dict:
     return prof
 
 
+# Επεξήγηση: Συνθέτει το προφίλ που επιτρέπεται να δει ο συγκεκριμένος χρήστης.
 def for_twin() -> dict | None:
     """Profile the twin reasons with: inherited company rules first (they win on conflict), then own traits."""
     prof = current()

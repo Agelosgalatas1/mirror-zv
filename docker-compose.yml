@@ -1,3 +1,4 @@
+# Επεξήγηση: Εκκινεί την εφαρμογή, περνά τις μεταβλητές περιβάλλοντος και διατηρεί τη βάση σε volume.
 # One command: docker compose up --build   ->   http://localhost:8000
 name: mirror
 services:

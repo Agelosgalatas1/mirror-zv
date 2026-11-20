@@ -1,3 +1,4 @@
+# Επεξήγηση: Ελέγχει τη ροή της διεπαφής: σύνδεση, ρόλους, ιστορικό, φωνή και self-test.
 import pytest
 
 pytestmark = pytest.mark.usefixtures("published_company_rules")

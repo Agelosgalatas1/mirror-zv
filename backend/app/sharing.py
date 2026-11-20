@@ -1,3 +1,4 @@
+# Επεξήγηση: Η δημοσίευση εταιρικού κανόνα απαιτεί ρητή έγκριση για το ακριβές περιεχόμενό του.
 """Human publication is the only authority for sharing ancestor knowledge.
 
 Model output and snapshot flags never grant access. Approval is a separate DB
@@ -21,6 +22,7 @@ def restricted(person: str | None = None) -> bool:
     return viewer is not None and viewer != (person or pid())
 
 
+# Επεξήγηση: Δένει την έγκριση με το περιεχόμενο και τα τεκμήρια που εξετάστηκαν.
 def content_hash(section: str, trait: dict) -> str:
     data = {k: trait[k] for k in PUBLIC_FIELDS if k in trait}
     # A changed/revoked evidence set also invalidates its publication.
@@ -28,6 +30,7 @@ def content_hash(section: str, trait: dict) -> str:
     return hashlib.sha256(db.dumps([section, data]).encode()).hexdigest()
 
 
+# Επεξήγηση: Χαρακτηριστικό χωρίς ταιριαστή ανθρώπινη έγκριση δεν μοιράζεται.
 def approved_traits(person: str, prof: dict) -> list[dict]:
     records = {r['trait_id']: r for r in db.query('SELECT * FROM trait_publications WHERE person_id=?', (person,))}
     out = []
@@ -51,6 +54,7 @@ def public_identity(person: str) -> dict:
     return {k: owner.get(k) for k in ('id', 'name', 'display_name', 'role', 'reports_to')}
 
 
+# Επεξήγηση: Η κοινή προβολή αποκλείει ιδιωτικά κείμενα, προσωπικό ύφος και παραπομπές στις πηγές.
 def public_profile(prof: dict, person: str) -> dict:
     traits = approved_traits(person, prof)
     return {'owner': prof.get('owner', {}), 'summary': '', 'voice_notes': [], 'unknowns': [],
@@ -60,6 +64,7 @@ def public_profile(prof: dict, person: str) -> dict:
                for section in ('values', 'decision_rules', 'knowledge', 'preferences', 'relationships')}}
 
 
+# Επεξήγηση: Μόνο ο κάτοχος εγκρίνει ή ανακαλεί τη δημοσίευση δικού του εταιρικού κανόνα.
 def set_publication(person: str, trait_id: str, published: bool, expected_hash: str | None = None) -> None:
     from . import profile
     # This is an owner operation, never a capability inherited from a superior.
@@ -98,6 +103,7 @@ def review_rules(person: str) -> list[dict]:
             for section in SECTIONS for t in prof.get(section, []) if t.get('scope') == 'company']
 
 
+# Επεξήγηση: Αποτυπώνει το σύνολο εγκρίσεων για έλεγχο παλιού ιστορικού και ήχου.
 def access_fingerprint(viewer: str, target: str) -> str:
     from . import profile
     if viewer == target:
@@ -111,6 +117,7 @@ def access_fingerprint(viewer: str, target: str) -> str:
     return 'shared-v1:' + hashlib.sha256(db.dumps([viewer, target, rows]).encode()).hexdigest()
 
 
+# Επεξήγηση: Παλιό ιστορικό με διαφορετικά δικαιώματα δεν επαναχρησιμοποιείται.
 def visible_messages(rows: list[dict], viewer: str, target: str) -> list[dict]:
     if viewer == target:
         return rows
@@ -118,6 +125,7 @@ def visible_messages(rows: list[dict], viewer: str, target: str) -> list[dict]:
     return [r for r in rows if (r.get('payload') or {}).get('access_fingerprint') == stamp]
 
 
+# Επεξήγηση: Η επαναφορά συγκατάθεσης δεν ανασταίνει προηγούμενες ακυρωμένες εγκρίσεις.
 def invalidate_source(person: str, source_id: str) -> None:
     """Restoring consent must not resurrect a publication invalidated by withdrawal."""
     from . import profile

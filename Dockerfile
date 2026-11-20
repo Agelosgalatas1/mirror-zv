@@ -1,3 +1,4 @@
+# Επεξήγηση: Χτίζει ένα container για API και frontend, με μη προνομιούχο χρήστη και έλεγχο υγείας.
 # ---------- Python API that also serves the web app (plain HTML/CSS/JS, no build step) ----------
 FROM python:3.12-slim-bookworm AS app
 ENV PYTHONDONTWRITEBYTECODE=1 \

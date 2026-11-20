@@ -1,3 +1,4 @@
+/* Επεξήγηση: Παίζει τον ήδη εγκεκριμένο ήχο μέσω Simli και κλείνει τη συνεδρία όταν λήξει ή ανακληθεί η πρόσβαση. */
 import {wavToPCM} from './simli-pcm.js';
 const p=new URLSearchParams(location.search),mid=p.get('m'),turn=p.get('turn'),cid=p.get('cid'),view=p.get('v'),auto=p.get('auto')==='1';
 const names={ceo:'Kate',sales:'Hank',finance:'Zahra'},status=document.querySelector('#status'),start=document.querySelector('#start'),stop=document.querySelector('#stop');
@@ -5,6 +6,7 @@ const video=document.querySelector('#simli-video'),audio=document.querySelector(
 document.querySelector('#employee-name').textContent=p.get('name')||names[mid]||'MIRROR';
 let client=null,lease=null,ended=false,working=false,heartbeat=null,deadline=null,spoke=false;
 const controller=new AbortController();
+// Επεξήγηση: Τα αιτήματα περνούν από τον δικό μας server· το Simli API key δεν φτάνει στον browser.
 async function request(path,body){
   const options={credentials:'same-origin',signal:controller.signal};
   if(body!==undefined){options.method='POST';options.headers={'Content-Type':'application/json','X-Mirror-Request':'1'};options.body=JSON.stringify(body)}
@@ -12,10 +14,12 @@ async function request(path,body){
   if(!r.ok){const e=await r.json().catch(()=>({}));if(r.status===403&&e.code==='mirror_access')parent.postMessage({type:'mirror:access-denied',mirror_id:mid,view_id:view},location.origin);throw Object.assign(Error(e.error||'Η σύνδεση avatar δεν είναι διαθέσιμη.'),{code:e.code})}
   return r;
 }
+// Επεξήγηση: Ελευθερώνει τη δέσμευση της συνεδρίας όταν κλείνει το βίντεο.
 function releaseLease(){
   if(lease)fetch(`/api/voice/${turn}/simli/${lease}/close`,{method:'POST',credentials:'same-origin',keepalive:true,headers:{'Content-Type':'application/json','X-Mirror-Request':'1'},body:'{}'}).catch(()=>{});
 }
 // fallback: the face failed before speaking, so the page plays the same checked answer as audio.
+// Επεξήγηση: Σταματά τον client και τα media και ζητά ήχο ως εναλλακτική μόνο όταν χρειάζεται.
 async function finish(message='Η συνεδρία βίντεο ολοκληρώθηκε.',fallback=false){
   if(ended)return;ended=true;
   if(fallback&&!spoke)parent.postMessage({type:'mirror:avatar-fallback',mirror_id:mid,view_id:view,turn},location.origin);
@@ -26,6 +30,7 @@ async function finish(message='Η συνεδρία βίντεο ολοκληρώ
   releaseLease();
   start.disabled=true;stop.disabled=true;placeholder.hidden=false;portrait.hidden=false;status.textContent=message;
 }
+// Επεξήγηση: Ελέγχει αντιστοίχιση ήχου και συζήτησης πριν ανοίξει περιορισμένη συνεδρία βίντεο.
 async function begin(){
   if(working||ended)return;working=true;parent.postMessage({type:'mirror:avatar-start',mirror_id:mid,view_id:view},location.origin);start.disabled=true;status.textContent='Σύνδεση με το avatar…';
   try{

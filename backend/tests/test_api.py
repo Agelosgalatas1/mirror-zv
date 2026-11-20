@@ -1,3 +1,4 @@
+# Επεξήγηση: Ελέγχει ταυτοποίηση, ιδιωτικές μνήμες, συνομιλίες, εισαγωγή και κληρονομικότητα.
 import pytest
 
 pytestmark = pytest.mark.usefixtures("published_company_rules")

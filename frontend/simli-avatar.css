@@ -1,3 +1,4 @@
+/* Επεξήγηση: Διάταξη της ξεχωριστής επιφάνειας βίντεο, με πορτρέτο και κατάσταση σύνδεσης. */
 *{box-sizing:border-box}
 html,body{height:100%;margin:0;background:#101725;color:#e8eef8;font:14px/1.5 system-ui}
 body{display:flex;flex-direction:column}

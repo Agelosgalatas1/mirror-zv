@@ -1,3 +1,4 @@
+# Επεξήγηση: Βρίσκει σχετικά αποσπάσματα με BM25 και, όταν υπάρχουν, διανύσματα σημασιολογικής αναζήτησης.
 """Hybrid retrieval over personal memory: BM25 (always) + dense embeddings
 (when an embedding provider is configured), fused with Reciprocal Rank Fusion.
 
@@ -27,6 +28,7 @@ def _fold(s: str) -> str:
     return "".join(c for c in s if unicodedata.category(c) != "Mn")
 
 
+# Επεξήγηση: Αφαιρεί τόνους και προσθέτει προθέματα για καλύτερη αντιστοίχιση ελληνικών λέξεων.
 def tokenize(text: str) -> list[str]:
     toks = []
     for w in TOKEN_RE.findall(_fold(text)):
@@ -62,6 +64,7 @@ class MemoryIndex:
         self.emb: np.ndarray | None = None
         self.emb_rows: list[int] = []
 
+    # Επεξήγηση: Ευρετηριάζει μόνο πηγές με συγκατάθεση του αντίστοιχου προσώπου.
     def rebuild(self) -> None:
         rows = db.query(
             "SELECT c.id, c.item_id, c.source_id, c.text, c.embedding FROM chunks c "
@@ -126,6 +129,7 @@ class MemoryIndex:
         order = np.argsort(-sims)[:50]
         return [(self.emb_rows[j], float(sims[j])) for j in order]
 
+    # Επεξήγηση: Συνδυάζει τις διαθέσιμες κατατάξεις και επιστρέφει περιορισμένα σχετικά αποσπάσματα.
     def search(
         self,
         query: str,

@@ -1,3 +1,4 @@
+# Επεξήγηση: Μετατρέπει διαφορετικούς τύπους αρχείων σε κοινή μορφή μηνυμάτων και εγγράφων.
 """Parsers that turn a raw digital footprint into normalised items.
 
 Supported: .mbox / .eml (email), Slack-style .json, WhatsApp .txt exports,
@@ -113,6 +114,7 @@ def _iso(dt: datetime | None) -> str | None:
 
 # ----------------------------------------------------------------- email
 
+# Επεξήγηση: Αναγνωρίζει αποστολέα, κανάλι και περιεχόμενο κάθε email.
 def parse_email_message(msg: email.message.Message, owner: Owner) -> RawItem | None:
     from_list = getaddresses([str(msg.get("From", ""))])
     to_list = getaddresses([str(msg.get("To", "")), str(msg.get("Cc", ""))])
@@ -206,6 +208,7 @@ def owner_placeholder() -> str:
     return "owner"
 
 
+# Επεξήγηση: Κανονικοποιεί εξαγωγές chat και συνδέει τα διαθέσιμα συμφραζόμενα.
 def parse_chat_json(data: bytes, owner: Owner) -> list[RawItem]:
     obj = json.loads(data.decode("utf-8"))
     msgs = obj.get("messages", obj) if isinstance(obj, dict) else obj
@@ -252,6 +255,7 @@ def parse_pdf(data: bytes, filename: str, owner: Owner) -> list[RawItem]:
 
 # ----------------------------------------------------------------- dispatcher
 
+# Επεξήγηση: Επιλέγει αναγνώστη ανάλογα με τον τύπο αρχείου.
 def parse_file(filename: str, data: bytes, owner: Owner) -> list[RawItem]:
     name = filename.lower()
     if name.endswith(".zip"):
@@ -281,6 +285,7 @@ def parse_file(filename: str, data: bytes, owner: Owner) -> list[RawItem]:
 SUPPORTED = ".mbox, .eml, .json (Slack/chat), .txt (εξαγωγή WhatsApp ή σημειώσεις), .md, .pdf, .zip"
 
 
+# Επεξήγηση: Εντοπίζει τα υποστηριζόμενα αρχεία για την αρχική εισαγωγή.
 def iter_demo_files(demo_dir: Path) -> Iterable[Path]:
     for p in sorted(demo_dir.rglob("*")):
         if p.is_file() and p.parent.name != "eval" and p.name != "owner.json":

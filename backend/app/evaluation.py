@@ -1,3 +1,4 @@
+# Επεξήγηση: Μετρά την πιστότητα απαντήσεων σε παραδείγματα αξιολόγησης και κρατά τα αποτελέσματα.
 """Fidelity Lab: proving the twin is really "them".
 
 Four measurements on a held-out set the twin has never seen:

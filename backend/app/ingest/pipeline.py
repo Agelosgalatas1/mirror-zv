@@ -1,3 +1,4 @@
+# Επεξήγηση: Ροή εισαγωγής: ανάγνωση, απόκρυψη προσωπικών στοιχείων, τεμαχισμός, αποθήκευση και ευρετήριο.
 """Ingestion pipeline: parse -> redact -> chunk -> (embed) -> store -> index."""
 from __future__ import annotations
 
@@ -39,6 +40,7 @@ def get_owner() -> Owner:
     return Owner.from_dict(owner_dict())
 
 
+# Επεξήγηση: Αποθηκεύουμε παράγωγο του κωδικού με salt, όχι τον ίδιο τον κωδικό.
 def hash_password(password: str, salt: str | None = None) -> str:
     salt = salt or secrets.token_hex(8)
     digest = hashlib.pbkdf2_hmac("sha256", password.encode(), salt.encode(), 120_000).hex()
@@ -68,6 +70,7 @@ def upsert_person(p: dict) -> None:
                      "has_ai": p.get("has_ai", True)}, ensure_ascii=False)))
 
 
+# Επεξήγηση: Ακολουθεί την αλυσίδα προϊσταμένων, αποφεύγοντας κύκλους.
 def ancestors(person_id: str) -> list[str]:
     """The reporting chain above a person (manager, manager's manager, ...)."""
     chain, seen = [], set()
@@ -118,6 +121,7 @@ def _source_kind(filename: str, items: list[RawItem]) -> str:
     return KIND_OF_FILE.get(ext, "file")
 
 
+# Επεξήγηση: Η πηγή και τα αποσπάσματα αποθηκεύονται για το τρέχον πρόσωπο.
 def ingest_bytes(filename: str, data: bytes, *, consent: bool = True, actor: str = "owner") -> dict:
     owner = get_owner()
     raw_items = parse_file(filename, data, owner)
@@ -183,6 +187,7 @@ def load_org(demo_dir: Path) -> dict:
     return json.loads(org_file.read_text("utf-8")) if org_file.exists() else {"persons": []}
 
 
+# Επεξήγηση: Κάθε φάκελος demo εισάγεται στη χωριστή μνήμη του αντίστοιχου προσώπου.
 def ingest_demo(demo_dir: Path) -> list[dict]:
     """Create the demo organisation and ingest each person's own footprint into their own memory."""
     org = load_org(demo_dir)
@@ -204,6 +209,7 @@ def ingest_demo(demo_dir: Path) -> list[dict]:
     return results
 
 
+# Επεξήγηση: Ακυρώνει σχετικές δημοσιεύσεις πριν αφαιρέσει την πηγή και ενημερώσει το ευρετήριο.
 def delete_source(source_id: str) -> dict:
     src = db.one("SELECT * FROM sources WHERE id=? AND person_id=?", (source_id, pid()))
     if not src:
@@ -220,6 +226,7 @@ def delete_source(source_id: str) -> dict:
     return {"deleted_items": item_ids, "name": src["name"]}
 
 
+# Επεξήγηση: Η ανάκληση συγκατάθεσης αποκλείει την πηγή από τη χρήση της.
 def set_consent(source_id: str, consent: bool) -> None:
     if not consent:
         from .. import sharing

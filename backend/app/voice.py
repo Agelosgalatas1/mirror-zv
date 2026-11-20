@@ -1,3 +1,4 @@
+# Επεξήγηση: Προαιρετική μεταγραφή και σύνθεση ElevenLabs, με οριοθετημένες συνεδρίες avatar Simli.
 """Optional premium voice and avatar.
 
 * ElevenLabs: text-to-speech (each person has their own voice) and speech-to-text (Scribe).
@@ -113,6 +114,7 @@ def _tts_call(text: str, voice: str, model: str, person: str) -> bytes:
     return raw[: len(raw) - (len(raw) % 2)]
 
 
+# Επεξήγηση: Η προσωρινή cache αποφεύγει επαναλαμβανόμενη σύνθεση του ίδιου κειμένου και φωνής.
 def speak(text: str, person: str) -> bytes:
     """WAV (16 kHz mono PCM) of the person's voice reading the text. Cached to save credits."""
     if not elevenlabs_enabled():
@@ -155,6 +157,7 @@ def speak(text: str, person: str) -> bytes:
 
 # ------------------------------------------------------------------ speech to text
 
+# Επεξήγηση: Στέλνει την ηχογράφηση στο Scribe με ελληνική γλώσσα και χειρίζεται αποτυχίες.
 def transcribe(audio: bytes, content_type: str = "audio/webm") -> str:
     if not elevenlabs_enabled():
         raise VoiceError("Δεν έχει ρυθμιστεί κλειδί ElevenLabs.")
@@ -200,6 +203,7 @@ def _limit(name: str, default: int) -> int:
         return default
 
 
+# Επεξήγηση: Περιορίζει τη διάρκεια κάθε συνεδρίας και ελέγχει την τοπική ημερήσια χρήση.
 def simli_session(person: str, audio_seconds: float, user_id: str) -> dict:
     """Mint a short-lived Simli session token for one spoken answer, within a local daily budget."""
     if not simli_enabled():

@@ -1,3 +1,4 @@
+# Επεξήγηση: Εργαλείο παραγωγής έτοιμων προφίλ από τα demo δεδομένα· εκτελείται μόνο όταν ζητηθεί.
 """Rebuild the shipped persona snapshots (data/snapshot/<id>.json) from the demo data with an LLM.
 
     DATA_DIR=/tmp/mirror-build python -m tools.build_snapshots /out [ceo sales finance]

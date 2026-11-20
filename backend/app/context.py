@@ -1,3 +1,4 @@
+# Επεξήγηση: Κρατά χωριστά τον συνδεδεμένο χρήστη και το πρόσωπο του οποίου τα δεδομένα επεξεργαζόμαστε.
 """Which person's twin a piece of code is working for.
 
 Every request runs "as" one person of the organisation (set by the auth
@@ -19,6 +20,7 @@ def pid() -> str:
     return CURRENT_PERSON.get()
 
 
+# Επεξήγηση: Η προσωρινή αλλαγή προσώπου αναιρείται ακόμη και αν προκύψει σφάλμα.
 @contextmanager
 def as_person(person_id: str) -> Iterator[str]:
     token = CURRENT_PERSON.set(person_id)

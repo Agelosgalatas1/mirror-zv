@@ -1,3 +1,4 @@
+/* Επεξήγηση: Ελέγχει το WAV και μετατρέπει τον ήχο σε PCM 16 kHz, τη μορφή που χρειάζεται το Simli. */
 // Decode only the bounded PCM WAVs already produced by our checked voice service.
 export function wavToPCM(buffer) {
   if (!(buffer instanceof ArrayBuffer) || buffer.byteLength < 44 || buffer.byteLength > 6*1024*1024) throw Error('Invalid WAV');

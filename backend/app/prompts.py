@@ -1,3 +1,4 @@
+# Επεξήγηση: Συγκεντρώνει τις οδηγίες προς το AI· οι πραγματικοί έλεγχοι πρόσβασης εφαρμόζονται στον server.
 """All prompts in one place, so they can be reviewed and versioned."""
 
 # ------------------------------------------------------------------ profile extraction

@@ -1,3 +1,4 @@
+# Επεξήγηση: Αποθήκευση σε SQLite: πρόσωπα, πηγές, προφίλ, συνομιλίες και εγκρίσεις.
 """SQLite persistence. One file, WAL mode, small typed helpers.
 
 Only *redacted* text is ever stored: raw uploads are parsed in memory, PII is
@@ -184,6 +185,7 @@ CREATE TABLE IF NOT EXISTS blind_votes (
 """
 
 
+# Επεξήγηση: Ανοίγει τη βάση και εφαρμόζει τις απαραίτητες προσθήκες σχήματος.
 def connect() -> sqlite3.Connection:
     global _CONN
     with _LOCK:
@@ -201,6 +203,7 @@ def connect() -> sqlite3.Connection:
         return _CONN
 
 
+# Επεξήγηση: Ομαδοποιεί τις εγγραφές σε συναλλαγή με αναίρεση σε περίπτωση σφάλματος.
 @contextmanager
 def tx() -> Iterator[sqlite3.Connection]:
     conn = connect()
@@ -280,6 +283,7 @@ def reset_all() -> None:
             conn.execute(f"DELETE FROM {table}")
 
 
+# Επεξήγηση: Παίρνει συνεπές αντίγραφο της SQLite πριν από την εκούσια επαναφορά του demo.
 def backup() -> str:
     """Consistent SQLite backup before an explicitly requested destructive demo reset."""
     from datetime import datetime, timezone

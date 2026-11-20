@@ -1,3 +1,4 @@
+# Επεξήγηση: Μετατρέπει τα συνθετικά δεδομένα του παλιού έργου στη μορφή εισαγωγής του MIRROR.
 """Import the NexaTech Solutions datasets (team's ZV repo, folder `sources/`) as MIRROR demo data.
 
     python scripts/import_zv.py /path/to/ZV/sources

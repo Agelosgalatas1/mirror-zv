@@ -1,3 +1,4 @@
+# Επεξήγηση: Εκτελεί αργές εργασίες στο παρασκήνιο και επιστρέφει την πρόοδό τους.
 """Tiny background-job runner for long operations (profile build, evaluation)."""
 from __future__ import annotations
 
@@ -13,6 +14,7 @@ _JOBS: dict[str, dict[str, Any]] = {}
 _LOCK = threading.Lock()
 
 
+# Επεξήγηση: Μεταφέρει και το πλαίσιο χρήστη στην εργασία ώστε να διατηρούνται οι ίδιοι έλεγχοι.
 def start(kind: str, fn: Callable[[Callable[[float, str], None]], Any]) -> dict:
     with _LOCK:
         for j in _JOBS.values():
