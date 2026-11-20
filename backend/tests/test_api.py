@@ -140,6 +140,74 @@ def test_ceo_evaluation_beats_baseline_offline():
     assert s["abstention_rate"] >= 75 and s["knowledge_recall"] >= 50
 
 
+def test_offline_decisions_use_only_relevant_situation_evidence():
+    from app import evaluation, twin
+    from app.context import as_person
+
+    with TestClient(app):
+        for person in ("ceo", "sales", "finance"):
+            with as_person(person):
+                holdout = evaluation.load_holdout()
+                for case in holdout["decisions"]:
+                    result = twin.decide(case["situation"], case["options"], log=False)
+                    assert result["choice"] == case["actual"], f"{person}/{case['id']}: {result['why']}"
+
+        with as_person("sales"):
+            unknown = twin.decide("Να ιδρύσουμε γραφείο στη Σελήνη;", ["Ναι", "Όχι"], log=False)
+        assert unknown["choice"] is None and unknown["unsure"]
+
+
+def test_offline_answers_respect_policy_versions_and_abstain_without_evidence():
+    from app import twin
+    from app.context import as_person
+
+    with TestClient(app):
+        with as_person("sales"):
+            versioned = twin.ask("Μέχρι πόση έκπτωση μπορεί να βάλει σε draft ένας Sales Executive με το v2?",
+                                 log=False)
+            unknown = twin.ask("Ποιος θα αντικαταστήσει την CEO αν φύγει?", log=False)
+        with as_person("ceo"):
+            budget = twin.ask("Πόσο budget έμεινε αδιάθετο για το Q4?", log=False)
+
+    assert "6%" in versioned["answer"] and "23%" in versioned["answer"]
+    assert "5%" not in versioned["answer"]
+    assert unknown["unsure"] and "δεν το ξέρω" in unknown["answer"].lower()
+    assert "34k" in budget["answer"].lower()
+
+
+def test_ceo_quarter_priorities_are_in_the_shipped_profile():
+    from app import twin
+    from app.context import as_person
+
+    with TestClient(app):
+        with as_person("ceo"):
+            result = twin.ask("Τι είναι προτεραιότητα αυτό το τρίμηνο;", log=False)
+
+    assert not result["unsure"]
+    assert any(t["id"] == "k16" for t in result["traits"])
+    assert "renewals" in result["answer"].lower()
+
+
+def test_live_model_abstention_cannot_hide_matching_profile_evidence(monkeypatch):
+    from app import twin
+    from app.context import as_person
+
+    monkeypatch.setattr(twin.LLM_CLIENT, "provider", "openai")
+    monkeypatch.setattr(twin.LLM_CLIENT, "json", lambda *args, **kwargs: {
+        "answer": "Δεν ξέρω ακόμη.", "confidence": 0.2, "unsure": True,
+        "trait_refs": [], "memory_refs": [], "why": "No relevant memories found.",
+    })
+    with TestClient(app):
+        with as_person("ceo"):
+            result = twin.ask("Σε pilot, αν ένα τιμολόγιο είναι πάνω από 15 ημέρες ληξιπρόθεσμο, ποιο stop-loss εφαρμόζω;",
+                              log=False)
+
+    assert not result["unsure"]
+    assert result["mode"] == "grounded-profile"
+    assert any(t["id"] == "r4" for t in result["traits"])
+    assert "παγώνω νέες παραγγελίες" in result["answer"].lower()
+
+
 def test_manager_evaluation_uses_held_out_examples():
     with TestClient(app) as c:
         hf = login(c, SALES)

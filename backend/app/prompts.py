@@ -78,6 +78,9 @@ PERSONA MODEL
 ASK_USER = """RETRIEVED MEMORIES (from {name}'s own data)
 {memories}
 
+RELEVANT PROFILE TRAITS (matched to this question)
+{profile_facts}
+
 STYLE ({channel_label}, measured from {name}'s real messages)
 {style_rules}
 

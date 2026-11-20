@@ -47,7 +47,7 @@ Open **http://localhost:8000**. Stop the stack with `docker compose down`. Data 
 - **Full live demo:** configure one LLM provider (`OPENAI_API_KEY` or `ANTHROPIC_API_KEY`), `ELEVENLABS_API_KEY` for voice/transcription, and `SIMLI_API_KEY` for the human avatar. See [environment variables](#environment-variables-and-keys).
 - **Local LLM:** `docker compose --profile local-llm up --build -d`, then `docker compose exec ollama ollama pull qwen2.5:7b`; set `LLM_PROVIDER=ollama` and `OLLAMA_BASE_URL=http://ollama:11434` in `.env`. Voice/avatar still use their external services and keys.
 
-On first start, `AUTO_SEED=true` imports the synthetic NexaTech demo only when the database is empty. Changes to bundled files or snapshots do not reset a populated database. **There is no automatic data replay every 120 seconds.**
+On first start, `AUTO_SEED=true` imports the synthetic NexaTech demo only when the database is empty. When a shipped snapshot changes, only an untouched built-in snapshot profile is refreshed automatically; conversations, sources, and owner-built or owner-edited profiles are preserved. **There is no automatic data replay every 120 seconds.**
 
 Requirements: Docker Engine/Desktop with Compose v2 on Linux, macOS or Windows. One container serves the API and frontend; the default host port is `8000` (`PORT` in `.env`).
 
@@ -78,7 +78,7 @@ The `.env` is emailed directly to the judges and is not uploaded to GitHub.
 
 ## Data preservation and rule publication
 
-- `AUTO_SEED=true` initializes an empty installation only. Changes to demo files or snapshots do not delete chats, passwords or existing profiles.
+- `AUTO_SEED=true` initializes an empty installation only. A snapshot update refreshes only the untouched built-in profile; it does not delete chats, sources or owner-edited / LLM-built profiles.
 - **Before a presentation:** open the self-test and company-rules section as the profile owner. Review each rule and publish only the rules intended for descendants to inherit.
 - Only company values and rules explicitly approved and published by their owner are inherited. Personal memories and original evidence remain private.
 - To intentionally reset the demo database, the CEO uses the in-app reset action. A backup is created first.
@@ -131,7 +131,7 @@ These credentials are for this synthetic demo only.
 
 Passwords are stored as PBKDF2 hashes. The session is an `HttpOnly`, `SameSite=Strict` cookie and every write also needs the `X-Mirror-Request` header (CSRF guard); API clients may use `Authorization: Bearer <token>`.
 
-**Data** (`python scripts/import_zv.py <ZV>/sources` → `backend/data/demo/<person>/`, 100% synthetic): per person 10 emails (.eml), Teams chats, notes, policies (SALE-DISC v1/v2, FIN-CREDIT v1/v2, FIN-PROC-03), memos, meeting minutes, call transcripts, the 2026 decision log, CRM/ERP workflow logs, draft-vs-final texts and two personality-seed emails. The shipped persona models (`backend/data/snapshot/`) were extracted from this data with `python -m tools.build_snapshots`, so the demo also works without a key.
+**Data** (`python scripts/import_zv.py` finds a sibling `ZV/sources` folder, or pass its path → `backend/data/demo/<person>/`, 100% synthetic): per person 10 emails (.eml), Teams chats, notes, policies (SALE-DISC v1/v2, FIN-CREDIT v1/v2, FIN-PROC-03), memos, meeting minutes, call transcripts, the 2026 decision log, CRM/ERP workflow logs, draft-vs-final texts and two personality-seed emails. The shipped persona models (`backend/data/snapshot/`) were extracted from this data with `python -m tools.build_snapshots`, so the demo also works without a key.
 
 ## From login to interactive use
 

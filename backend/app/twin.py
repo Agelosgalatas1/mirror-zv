@@ -94,6 +94,18 @@ def format_memories(hits: list[Hit]) -> str:
     return "\n\n".join(out) or "(no relevant memories found)"
 
 
+def format_profile_facts(prof: dict, question: str, k: int = 6) -> str:
+    """Put the strongest matching, evidence-backed profile traits next to the retrieved memories."""
+    lines = []
+    for score, trait in _score_traits(prof, question)[:k]:
+        text = _say(trait)
+        trigger = trait.get("when")
+        if trigger and trigger not in text:
+            text += f" [applies when: {trigger}]"
+        lines.append(f"- [{trait['id']} · {trait['section']} · relevance {score:.2f}] {text}")
+    return "\n".join(lines) or "(no profile traits matched this question)"
+
+
 def exemplars(channel: str, query: str, n: int = 4) -> list[dict]:
     if sharing.restricted():
         return []
@@ -206,7 +218,7 @@ QSTOP = {"ποια", "ποιο", "ποιος", "ποιες", "ποιοι", "πω
          "εισαι", "είσαι", "εχεις", "έχεις", "κανεις", "κάνεις", "την", "τον", "της", "του", "στο", "στη", "στην",
          "για", "και", "με", "να", "θα", "μας", "σου", "μου", "what", "which", "how", "why", "do", "does", "you", "your",
          "the", "is", "are", "our", "for", "to", "of", "in", "on", "we", "και", "ειναι", "είναι", "σε", "μια", "ένα",
-         "ενα", "από", "απο", "τα", "το", "η", "ο", "οι", "τη", "των", "δεν", "κανουμε", "κάνουμε", "κανω", "κάνω",
+         "ενα", "από", "απο", "τα", "το", "η", "ο", "οι", "τη", "των", "δεν", "αν", "κανουμε", "κάνουμε", "κανω", "κάνω",
          "κανει", "κάνει", "αγαπημενος", "αγαπημένος", "αγαπημενη", "αγαπημένη", "αγαπημενο", "αγαπημένο",
          "θελεις", "θέλεις", "πιστευεις", "πιστεύεις", "νομιζεις", "νομίζεις", "πες", "μου", "λιγο", "λίγο"}
 
@@ -244,6 +256,20 @@ def _coverage(question: str, text: str) -> float:
         elif len(w) >= 6 and w[:6] in prefixes6:
             score += 0.4
     return score / len(q)
+
+
+def _specific_words(text: str) -> list[str]:
+    """Content words used to tell a real topical match from one shared name."""
+    return list(dict.fromkeys(w for w in _words(text) if len(w) >= 3))
+
+
+def _supported_word_count(question: str, text: str) -> int:
+    """Count distinct question terms supported by a candidate, including Greek stems."""
+    target = _specific_words(question)
+    words = set(_words(text))
+    stems = {_stem(w) for w in words}
+    prefixes = {w[:6] for w in words if len(w) >= 6}
+    return sum(1 for w in target if w in words or _stem(w) in stems or (len(w) >= 6 and w[:6] in prefixes))
 
 
 INTENTS = [
@@ -285,6 +311,8 @@ def _score_traits(prof: dict, question: str) -> list[tuple[float, dict]]:
     boost = {"decision_rules": 1.35, "values": 1.2} if hypothetical else {}
     # second-person questions ("πού μένεις;", "τι πίνεις;") are about the person, not the company
     personal = any(w.endswith(("εις", "εσαι", "ας")) and len(w) > 4 for w in _words(question))
+    requested_versions = set(re.findall(r"(?<![a-z0-9])v\s*([1-9]\d*)\b", _fold(question)))
+    asks_about_draft = bool(re.search(r"\bdraft\b|προσχεδι", _fold(question)))
     scored = []
     for sec, w in weights.items():
         for t in prof.get(sec, []):
@@ -294,7 +322,19 @@ def _score_traits(prof: dict, question: str) -> list[tuple[float, dict]]:
             cov = _coverage(question, body)
             if cov <= 0:
                 continue  # at least one content word must match
+            if len(_specific_words(question)) >= 3 and _supported_word_count(question, body) < 2:
+                continue  # a shared name or generic word alone is not evidence for a different topic
             sc = (0.75 * cov + 0.25 * _overlap(question, body)) * w * boost.get(sec, 1.0)
+            if requested_versions:
+                versions = set(re.findall(r"(?<![a-z0-9])v\s*([1-9]\d*)\b", _fold(body)))
+                if requested_versions & versions:
+                    sc *= 1.8
+                elif versions:
+                    sc *= 0.25
+                else:
+                    sc *= 0.55
+            if asks_about_draft:
+                sc *= 1.2 if re.search(r"\bdraft\b|προσχεδι", _fold(body)) else 0.8
             if personal and (sec == "preferences" or str(t.get("category", "")).startswith(("προσωπ", "personal"))):
                 sc *= 1.25
             if sc > 0:
@@ -330,22 +370,32 @@ def _source_label(it: dict) -> str:
 
 
 def _fact_from_memory(question: str, hits: list[Hit]) -> tuple[str, Hit] | None:
-    """A single sentence from the owner's own texts that covers the question (facts that live in documents)."""
+    """A sentence or adjacent heading/body window from the owner's texts that covers the question."""
     qw = _words(question)
     if len(qw) < 2:
         return None
+    asks_for_amount = bool(re.search(r"\b(ποσο|ποση|ποσοι|amount|how much|budget|τιμη|ποσο)\b", _fold(question)))
     best, best_cov = None, 0.0
     for h in hits[:6]:
         if not h.item.get("is_owner"):
             continue
-        for sent in re.split(r"(?<=[.!;])\s+|\n+", h.text):
-            sent = sent.strip(" -*#|>\t")
-            if not (20 <= len(sent) <= 260):
-                continue
-            cov = _coverage(question, sent)
-            if cov > best_cov:
-                best, best_cov = (sent, h), cov
-    return best if best and best_cov >= 0.6 else None
+        sentences = [s.strip(" -*#|>\t") for s in re.split(r"(?<=[.!;])\s+|\n+", h.text)]
+        # Headers often carry the period or subject while the next line carries the amount.
+        # Score short adjacent windows together so exact facts such as "Q4 / €34k" stay linked.
+        for start in range(len(sentences)):
+            for width in (1, 2):
+                sent = " ".join(s for s in sentences[start:start + width] if s)
+                if not (20 <= len(sent) <= 360):
+                    continue
+                if asks_for_amount and not re.search(r"\d", sent):
+                    continue
+                if _supported_word_count(question, sent) < 2:
+                    continue
+                cov = _coverage(question, sent)
+                if cov > best_cov:
+                    best, best_cov = (sent, h), cov
+    threshold = 0.45 if asks_for_amount else 0.6
+    return best if best and best_cov >= threshold else None
 
 
 def _offline_ask(prof: dict, question: str, hits: list[Hit], channel: str, history: list[dict] | None = None) -> dict:
@@ -469,10 +519,123 @@ def _amount(text: str) -> float | None:
     return val * 1000 if k else val
 
 
+def _percent_value(text: str) -> float | None:
+    match = re.search(r"(\d{1,3}(?:[.,]\d+)?)\s*%", text)
+    if not match:
+        return None
+    return float(match.group(1).replace(",", "."))
+
+
+def _percent_rule_applies(value: float, text: str) -> bool:
+    """Check explicit percentage bands before letting a nearby policy rule score an option."""
+    folded = _fold(text)
+    ranges = [
+        (float(a.replace(",", ".")), float(b.replace(",", ".")))
+        for a, b in re.findall(r"(\d+(?:[.,]\d+)?)\s*%?\s*(?:-|–|—|to|εως)\s*(\d+(?:[.,]\d+)?)\s*%", folded)
+    ]
+    if any(low <= value <= high for low, high in ranges):
+        return True
+    thresholds = re.findall(r"(>=|≥|<=|≤|>|<|above|over|below|under|πανω απο|κατω απο|εως)\s*(\d+(?:[.,]\d+)?)\s*%", folded)
+    if any((op in (">", "above", "over", "πανω απο") and value > float(n.replace(",", ".")))
+           or (op in (">=", "≥") and value >= float(n.replace(",", ".")))
+           or (op in ("<", "below", "under", "κατω απο") and value < float(n.replace(",", ".")))
+           or (op in ("<=", "≤", "εως") and value <= float(n.replace(",", ".")))
+           for op, n in thresholds):
+        return True
+    return False
+
+
 def _kw_in(kw: str, option_tokens: set[str]) -> bool:
     """A multi-word keyword matches only if all its (non-prefix) tokens are in the option."""
     toks = [t for t in tokenize(kw) if not t.endswith("~")]
     return bool(toks) and all(t in option_tokens for t in toks)
+
+
+def _decision_pattern_signals(situation: str, options: list[str]) -> tuple[list[float], dict[int, list[str]]]:
+    """Apply a few evidence-neutral safeguards when options expose a common decision trap."""
+    q = _fold(situation)
+    scores = [0.0] * len(options)
+    reasons: dict[int, list[str]] = {}
+
+    def reward_options(query_re: str, option_re: str, penalty_re: str, weight: float,
+                       reason: str, per_match: bool = False) -> None:
+        if not re.search(query_re, q):
+            return
+        for i, option in enumerate(options):
+            text = _fold(option)
+            if per_match:
+                good = len(re.findall(option_re, text))
+                bad = len(re.findall(penalty_re, text))
+                delta = min(3, good) * weight - min(3, bad) * weight * 1.5
+            else:
+                good = bool(re.search(option_re, text))
+                bad = bool(re.search(penalty_re, text))
+                delta = (weight if good else 0) - (weight * 1.5 if bad else 0)
+            if delta:
+                scores[i] += delta
+                if delta > 0:
+                    reasons.setdefault(i, []).append(reason)
+
+    # Unknown cost, margin, or missing facts: ask for them before approval.
+    reward_options(
+        r"(?:δεν.{0,35}(?:γνωστ|επιβεβαι|στοιχει|δεδομ)|χωρις.{0,25}(?:στοιχει|δεδομ)|"
+        r"αβεβαι|awaiting|unknown|not enough data|lack of data)",
+        r"ζητ|request|confirm|verif|check|cost|margin|history|exposure|detail|στοιχει|επιβεβαι|περιθωρι|κοστο|δεδομ",
+        r"approve|accept|commit|εγκριν|δεσμευ|συμφων|προχωρ",
+        1.0,
+        "Δεν έχουν επιβεβαιωθεί τα βασικά στοιχεία, οπότε προτιμώ να τα ζητήσω πριν από έγκριση.",
+        per_match=True,
+    )
+
+    # Several new orders against an open balance must be considered together.
+    reward_options(
+        r"(?:ανεξοφλητ|ληξιπροθεσμ|open balance).{0,90}(?:παραγγελ|order)|"
+        r"(?:παραγγελ|order).{0,90}(?:ανεξοφλητ|ληξιπροθεσμ|υπολοιπ|balance)",
+        r"συνολικ|total|combined|overall|same picture|ιδια εικονα|ολη την εικονα|αθροισ|exposure|εκθεση",
+        r"ξεχωριστ|separately|καθεμια|καθε μια|each order",
+        2.2,
+        "Εξετάζω τη συνολική έκθεση μαζί με το ανοιχτό υπόλοιπο.",
+    )
+
+    # Budget exceptions should stay scoped, owned, and reviewable.
+    reward_options(
+        r"εξαιρεσ.{0,80}(?:δαπαν|budget|προυπολογ|εκδηλω)|(?:δαπαν|expense).{0,80}(?:εκτο|outside).{0,30}(?:budget|προυπολογ)",
+        r"συγκεκριμενη περιπτωση|one.?time|owner|υπευθυν|οφελ|benefit|ημερομη|review|ελεγχ|αποτελεσμα",
+        r"μονιμ|permanent|ως κανονα για ολες|for all|γενικο κανονα",
+        0.75,
+        "Κρατώ την εξαίρεση συγκεκριμένη και ορίζω υπεύθυνο και ημερομηνία επανελέγχου.",
+        per_match=True,
+    )
+
+    # A long exception with insufficient evidence is better tested as a pilot.
+    reward_options(
+        r"(?:exception|εξαιρεσ|συνεργατ).{0,100}(?:year|12 month|χρον|δεδομεν|στοιχει|partner)|"
+        r"(?:δεν εχουμε αρκετα δεδομενα|not enough data).{0,100}(?:year|12 month|χρον|partner|συνεργατ)",
+        r"pilot|πιλοτ|δοκιμ|review|εξοδο|stop.?loss|κριτηρι|owner|υπευθυν|ημερομη",
+        r"12 μην|12 month|ολη τη χρονια|ολοκληρη χρονια|permanent|μονιμ|εγκριν|approve",
+        1.6,
+        "Προτιμώ πιλοτική συνεργασία με μετρήσιμα κριτήρια αντί για μακρά δέσμευση χωρίς δεδομένα.",
+    )
+
+    # When delivery is uncertain, communicate what is known and when the next update comes.
+    reward_options(
+        r"(?:παραδοσ|delivery).{0,90}(?:κινδυν|risk|περιμεν|await|επιβεβαιω|confirm)|"
+        r"περιμεν.{0,50}(?:επιβεβαιω|supplier|προμηθευτ)",
+        r"ενημερ|inform|notify|tell the customer|πελατ|today|σημερα|επανελθ|ωρα|υπευθυν|contact",
+        r"περιμεν|wait|πριν.{0,20}πουμε|before.{0,20}say anything",
+        2.5,
+        "Ενημερώνω τον πελάτη για όσα γνωρίζω και ορίζω πότε θα επανέλθουμε.",
+    )
+
+    # Sales cannot commit to extended payment terms before Finance approves them.
+    reward_options(
+        r"net\s?(?:45|60|90)|παρατεταμενη εξοφληση|οροι πληρωμης|payment terms",
+        r"finance|approvalflow|review|εγκρισ|ελεγχο|κλιμακ|περιμεν.{0,30}αξιολογ",
+        r"δεσμευτικ|binding|commit|promise|βαζουμε net|υποσχε",
+        2.6,
+        "Δεν δεσμεύομαι για εκτεταμένους όρους πληρωμής πριν από έγκριση του Finance.",
+    )
+    return scores, reasons
 
 
 def _option_scores(prof: dict, situation: str, options: list[str]) -> tuple[list[float], list[dict]]:
@@ -483,15 +646,24 @@ def _option_scores(prof: dict, situation: str, options: list[str]) -> tuple[list
     applied: dict[str, dict] = {}
     contrib: list[dict[str, float]] = [{} for _ in options]
     amount = _amount(situation)
+    percent = _percent_value(situation) if re.search(r"εκπτωσ|discount|concession", _fold(situation)) else None
     for r in rules:
         prefers = list(r.get("prefers", []))
         th = r.get("threshold")
         if th and amount is not None:
             prefers += th.get("above_prefers" if amount > th.get("amount", 0) else "below_prefers", [])
-        rel = _overlap(situation + " " + " ".join(options), f"{r.get('rule', '')} {r.get('when', '')} "
-                       + " ".join(prefers) + " " + " ".join(r.get("avoids", [])))
-        if th and amount is not None:
-            rel = max(rel, 0.5)
+        trigger = r.get("when") or r.get("rule", "") or r.get("text", "")
+        rule_text = f"{trigger} {r.get('rule', '')} {r.get('text', '')}"
+        if percent is not None and re.search(r"\d+(?:[.,]\d+)?\s*%", _fold(rule_text)) \
+                and not _percent_rule_applies(percent, rule_text):
+            continue
+        # Candidate options must not make an otherwise unrelated rule look applicable.
+        rel = max(_overlap(situation, trigger), 0.65 * _overlap(situation, rule_text))
+        support = _supported_word_count(situation, trigger)
+        if support == 0:
+            continue
+        if len(_specific_words(situation)) >= 4 and support == 1:
+            rel *= 0.65
         if rel <= 0.02:
             continue
         # soft signal: how much each option reads like what the person says they do (or avoid)
@@ -512,6 +684,8 @@ def _option_scores(prof: dict, situation: str, options: list[str]) -> tuple[list
                 raw[i] += delta
                 contrib[i][r["id"]] = contrib[i].get(r["id"], 0.0) + delta
                 applied[r["id"]] = r
+    pattern_scores, _ = _decision_pattern_signals(situation, options)
+    raw = [score + pattern for score, pattern in zip(raw, pattern_scores)]
     exps = [math.exp(4 * x) for x in raw]
     total = sum(exps)
     scores = [round(100 * e / total, 1) for e in exps]
@@ -527,13 +701,22 @@ def _offline_decide(prof: dict, situation: str, options: list[str], hits: list[H
     scores, applied = _option_scores(prof, situation, options)
     choice = max(range(len(options)), key=lambda i: scores[i])
     spread = max(scores) - min(scores)
-    unsure = spread < 8
+    _, pattern_reasons = _decision_pattern_signals(situation, options)
+    if not applied and not pattern_reasons:
+        choice = None
+    unsure = choice is None or spread < 8
     traits = [{"id": r["id"], "section": "decision_rules", "text": r.get("rule") or r.get("text"),
                "confidence": r.get("confidence"), "evidence": r.get("evidence", []),
                "inherited_from": r.get("inherited_from")} for r in applied[:4]]
-    why = ("Θα πήγαινα με αυτό. " + " ".join(_say(r) for r in applied[:2])) if applied \
-        else "Τίποτα στο ιστορικό μου δεν ταιριάζει ξεκάθαρα εδώ."
-    return {"choice": choice, "scores": scores, "unsure": unsure, "confidence": round(min(0.9, 0.35 + spread / 120), 2),
+    if choice is None:
+        why = "Δεν βρήκα κανόνα που να ταιριάζει αρκετά σε αυτή την απόφαση, οπότε δεν θα μαντέψω."
+    else:
+        why = ("Θα πήγαινα με αυτό. " + " ".join(_say(r) for r in applied[:2])) if applied \
+            else "Τίποτα στο ιστορικό μου δεν ταιριάζει ξεκάθαρα εδώ."
+        if pattern_reasons.get(choice):
+            why += " " + pattern_reasons[choice][0]
+    confidence = min(0.3, 0.35 + spread / 120) if choice is None else min(0.9, 0.35 + spread / 120)
+    return {"choice": choice, "scores": scores, "unsure": unsure, "confidence": round(confidence, 2),
             "why": why, "would_change_my_mind": "Δεδομένα που δείχνουν ότι η άλλη επιλογή δουλεύει καλύτερα για τους χρήστες μας.",
             "traits": traits, "memories": [_hit_view(h, f"M{i + 1}") for i, h in enumerate(hits[:3])]}
 
@@ -648,6 +831,7 @@ def ask(question: str, channel: str = "chat_team", *, log: bool = True, history:
                     prompts.TWIN_SYSTEM.format(owner=owner.name, role=owner.role, name=owner.display_name,
                                                persona=persona_digest(prof)),
                     prompts.ASK_USER.format(name=owner.display_name, memories=format_memories(hits),
+                                            profile_facts=format_profile_facts(prof, question),
                                             channel_label=CHANNEL_LABELS.get(channel, channel),
                                             style_rules="\n".join(describe_rules(style)) or "-",
                                             exemplars=format_exemplars(exemplars(channel, question, 3),
@@ -655,10 +839,20 @@ def ask(question: str, channel: str = "chat_team", *, log: bool = True, history:
                                             history=_format_history(history), question=question),
                     max_tokens=1500, effort="minimal")
                 refs = _resolve_refs(out, prof, hits)
-                res = {"answer": str(out.get("answer", "")).strip(), "unsure": bool(out.get("unsure")),
-                       "why": out.get("why", ""), **refs,
-                       "confidence": _calibrate(out.get("confidence"), len(refs["traits"]), len(refs["memories"]),
-                                                bool(out.get("unsure"))), "mode": "llm"}
+                if bool(out.get("unsure")) and not refs["traits"] and not refs["memories"]:
+                    # Do not let an LLM's generic abstention hide a strong, citable match in the local profile.
+                    grounded = _offline_ask(prof, question, hits, channel, history)
+                    if not grounded["unsure"] and (grounded["traits"] or grounded["memories"]):
+                        res = {**grounded, "mode": "grounded-profile"}
+                    else:
+                        res = {"answer": str(out.get("answer", "")).strip(), "unsure": True,
+                               "why": out.get("why", ""), **refs,
+                               "confidence": _calibrate(out.get("confidence"), 0, 0, True), "mode": "llm"}
+                else:
+                    res = {"answer": str(out.get("answer", "")).strip(), "unsure": bool(out.get("unsure")),
+                           "why": out.get("why", ""), **refs,
+                           "confidence": _calibrate(out.get("confidence"), len(refs["traits"]), len(refs["memories"]),
+                                                    bool(out.get("unsure"))), "mode": "llm"}
             except LLMUnavailable:
                 res = None
             except Exception as exc:  # noqa: BLE001 - AI down: answer offline and say why

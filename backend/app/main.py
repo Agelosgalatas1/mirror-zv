@@ -40,9 +40,15 @@ MAX_UPLOAD = 25 * 1024 * 1024
 def _ensure_profile() -> None:
     """Make sure the current person has a persona model (shipped snapshot, or heuristic)."""
     latest = profile.latest()
-    if latest and latest["meta"].get("method") in ("snapshot", "heuristic") \
+    if latest and latest["meta"].get("method") == "snapshot" \
             and latest["meta"].get("snapshot_hash") != profile.snapshot_hash():
-        # Never replace an existing persona just because a bundled snapshot changed.
+        # Refresh only the shipped, system-generated snapshot. Owner-built profiles and edits stay untouched.
+        snap = profile.load_snapshot()
+        if snap:
+            profile.save_version(snap, "snapshot", "Ανανέωση του έτοιμου profile από τα τρέχοντα δεδομένα demo.")
+        return
+    if latest and latest["meta"].get("method") == "heuristic":
+        # A heuristic profile may contain owner edits; do not replace it automatically.
         return
     if not latest and db.one("SELECT i.id FROM items i JOIN sources s ON s.id=i.source_id WHERE s.person_id=? LIMIT 1",
                              (pid(),)):

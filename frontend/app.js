@@ -22,12 +22,11 @@ function fill(el, ...kids) { el.replaceChildren(); return add(el, kids); }
 const $ = (sel, root = document) => root.querySelector(sel);
 const icon = (paths, size = 18) => s("svg", { viewBox: "0 0 24 24", width: size, height: size, fill: "none", stroke: "currentColor", "stroke-width": "1.9", "stroke-linecap": "round", "stroke-linejoin": "round", "aria-hidden": "true" }, ...paths.map(d => s("path", { d })));
 const I = {
-  plus: ["M12 5v14M5 12h14"], send: ["M5 12h14", "M13 6l6 6-6 6"], menu: ["M4 7h16M4 12h16M4 17h16"], close: ["M6 6l12 12M18 6 6 18"],
+  send: ["M5 12h14", "M13 6l6 6-6 6"], menu: ["M4 7h16M4 12h16M4 17h16"], close: ["M6 6l12 12M18 6 6 18"],
   trash: ["M5 7h14", "M10 11v6M14 11v6", "M6 7l1 13h10l1-13", "M9 7V4h6v3"], edit: ["M4 20h4L19 9l-4-4L4 16z", "M13 7l4 4"], search: ["M11 4a7 7 0 1 1 0 14 7 7 0 0 1 0-14z", "M20 20l-4-4"], copy: ["M9 9h11v11H9z", "M5 15V4h11"],
   up: ["M7 11v9H4v-9z", "M7 11l4-7a2 2 0 0 1 3 2l-1 4h5a2 2 0 0 1 2 2.3l-1.2 6A2 2 0 0 1 16.8 20H7"],
   down: ["M17 13V4h3v9z", "M17 13l-4 7a2 2 0 0 1-3-2l1-4H6a2 2 0 0 1-2-2.3l1.2-6A2 2 0 0 1 7.2 4H17"],
   back: ["M15 6l-6 6 6 6"], lock: ["M6 11h12v9H6z", "M8 11V8a4 4 0 0 1 8 0v3"], chat: ["M4 5h16v11H9l-5 4z"],
-  team: ["M12 3a2.4 2.4 0 1 1 0 4.8A2.4 2.4 0 0 1 12 3z", "M6 12a2.4 2.4 0 1 1 0 4.8A2.4 2.4 0 0 1 6 12zM18 12a2.4 2.4 0 1 1 0 4.8 2.4 2.4 0 0 1 0-4.8z", "M10.5 7.5 7.5 12M13.5 7.5l3 4.5"],
   mic: ["M12 3a3 3 0 0 1 3 3v6a3 3 0 0 1-6 0V6a3 3 0 0 1 3-3z", "M5 11a7 7 0 0 0 14 0", "M12 18v3"], stop: ["M7 7h10v10H7z"],
   speaker: ["M4 9h4l5-4v14l-5-4H4z", "M16 9a4 4 0 0 1 0 6", "M18.5 6.5a8 8 0 0 1 0 11"], face: ["M12 3a9 9 0 1 1 0 18 9 9 0 0 1 0-18z", "M9 10h.01M15 10h.01", "M8.5 14.5a5 5 0 0 0 7 0"],
   moon: ["M20 14A8 8 0 1 1 10 4a6.5 6.5 0 0 0 10 10z"], out: ["M15 4h4v16h-4", "M10 8l-4 4 4 4", "M6 12h11"], dots: ["M5 12h.01M12 12h.01M19 12h.01"],
@@ -45,7 +44,6 @@ function logo(size = 40, label) {
     s("path", { d: "M11 45.5 H53", stroke: "#fff", "stroke-opacity": ".28", "stroke-width": "1.4", "stroke-linecap": "round" }),
     s("path", { class: "logo-r", d: "M14 48.5 L23 56 L32 51.5 L41 56 L50 48.5", fill: "none", stroke: `url(#${id}r)`, "stroke-width": 3, "stroke-linecap": "round", "stroke-linejoin": "round" }));
 }
-const MIRROR_MEANING = "Machine Intelligence Replicating Routine Operations & Responses";
 const wordmark = () => h("div", { class: "brand", "aria-label": "MIRROR" }, logo(34), h("span", { class: "word" }, "MIR", h("span", {}, "ROR")));
 const reduceMotion = matchMedia("(prefers-reduced-motion: reduce)").matches;
 
@@ -132,9 +130,6 @@ function loginView() {
   }, 30);
   return h("main", { class: "login" }, h("div", { class: "login-card" },
     logo(78, "MIRROR"), h("h1", {}, "MIR", h("span", {}, "ROR")),
-    h("p", { class: "brand-meaning" }, MIRROR_MEANING),
-    h("p", { class: "lead" }, "Ο ψηφιακός καθρέφτης της ομάδας σου."),
-    h("p", { class: "login-description" }, "Μίλα με τα AI αντίγραφα των συναδέλφων σου με κείμενο, φωνή ή avatar. Βρες απαντήσεις από την εταιρική γνώση, με πρόσβαση ανάλογα με τον ρόλο σου."),
     h("form", { class: "login-form", onsubmit: async e => {
       e.preventDefault(); err.textContent = ""; btn.disabled = true; btn.textContent = "Σύνδεση…";
       try { state.session = await api("/api/login", { username: user.value, password: pass.value }); await start(true); }
@@ -288,9 +283,6 @@ function render() {
   fill(root, h("div", { class: "app", id: "app" },
     h("aside", { class: "sidebar", "aria-label": "Συζητήσεις" },
       h("div", { class: "top" }, wordmark(), h("button", { class: "iconbtn mobile-close", "aria-label": "Κλείσιμο μενού", onclick: closeNav }, icon(I.close))),
-      h("p", { class: "sidebar-meaning" }, MIRROR_MEANING),
-      h("button", { class: "btn new-chat", id: "nav-home", onclick: goHome }, icon(I.team), "Η ομάδα"),
-      h("button", { class: "btn new-chat ghost", onclick: newChat, disabled: !state.mirror }, icon(I.plus), "Νέα συζήτηση"),
       h("div", { class: "section" }, h("div", { class: "label" }, "Μίλα με"), h("div", { id: "people" })),
       h("div", { class: "label", style: { margin: "14px 18px 6px" } }, "Πρόσφατες"),
       h("label", { class: "thread-search" }, icon(I.search, 15),
@@ -344,7 +336,6 @@ function paintMain() {
 function paintSidebar() {
   const people = $("#people"), threads = $("#threads");
   if (!people) return;
-  $("#nav-home")?.setAttribute("aria-current", String(state.view === "home"));
   fill(people, state.session.mirrors.map(m => { const p = personFor(m);
     return h("button", { class: "person", "aria-current": String(state.view === "chat" && state.mirror?.id === m.id), onclick: () => state.mirror?.id === m.id && state.view === "chat" ? newChat() : openMirror(m) },
       avatar(p, "", true), h("span", {}, h("b", {}, p.name), h("small", {}, p.job_title))); }));
@@ -413,9 +404,7 @@ function paintHead() {
        ["avatar", "Avatar", I.face, "Απάντηση με φωνή και ζωντανό πρόσωπο"]].map(([value, label, glyph, tip]) =>
         h("button", { type: "button", "data-mode": value, title: tip, "aria-pressed": String(mode() === value), onclick: () => setMode(value) }, icon(glyph, 14), h("span", {}, label)))),
     h("button", { class: "iconbtn face-toggle", id: "face-toggle", hidden: true, "aria-label": "Εμφάνιση/απόκρυψη avatar", title: "Avatar", onclick: () => $("#chat-shell")?.classList.toggle("show-face") }, icon(I.face)),
-    h("span", { class: "ai-badge" + (state.session.ai?.online ? " on" : ""), title: state.session.ai?.online ? `Γράφει με ${state.session.ai.provider}:${state.session.ai.model}` : "Χωρίς κλειδί AI: απαντά από τα δεδομένα του προσώπου, χωρίς να γράφει νέο κείμενο" },
-      state.session.ai?.online ? `AI · ${state.session.ai.model}` : "Offline"),
-    h("span", { class: "status" + (state.offline ? " off" : ""), id: "status" }, h("i"), state.offline ? "Εκτός σύνδεσης" : "Διαθέσιμο"));
+    h("span", { class: "sr-only", id: "status", role: "status", "aria-live": "polite" }, state.offline ? "Εκτός σύνδεσης" : "Διαθέσιμο"));
 }
 
 /* ---------- 3D avatar & voice (avatar branch) ---------- */
@@ -597,7 +586,7 @@ async function playVoice(turn, keepAvatar = false) {
     audio.onerror = () => {
       if (state.audio === audio) { state.voiceContinuous = false; stopVoice({ keepAvatar }); }
     };
-    audio.onplay = () => { if (!currentContext(ctx) || state.audio !== audio) return; meterPlayback(audio); paintVoiceControls(); $("#chat-shell")?.classList.add("speaking"); const st = $("#status"); if (st) { st.className = "status speaking"; st.lastChild.textContent = "Μιλάει…"; } };
+    audio.onplay = () => { if (!currentContext(ctx) || state.audio !== audio) return; meterPlayback(audio); paintVoiceControls(); $("#chat-shell")?.classList.add("speaking"); const st = $("#status"); if (st) st.textContent = "Μιλάει…"; };
     await audio.play().catch(() => { if (currentContext(ctx) && state.audio === audio) { state.voiceContinuous = false; stopVoice({ keepAvatar }); toast("Πάτα 🔊 στην απάντηση για να την ακούσεις."); } });
   } catch { if (currentContext(ctx) && request === playbackRequest) { state.voiceContinuous = false; paintVoiceControls(); toast("Η φωνή δεν είναι διαθέσιμη για αυτή την απάντηση.", true); } }
 }
@@ -754,7 +743,7 @@ function encodeWav(samples, rate) {
   let o = 44; for (const x of samples) { const c = Math.max(-1, Math.min(1, x)); v.setInt16(o, c < 0 ? c * 0x8000 : c * 0x7fff, true); o += 2; }
   return new Blob([buffer], { type: "audio/wav" });
 }
-function paintStatus() { const st = $("#status"); if (st) { st.className = "status" + (state.offline ? " off" : ""); st.lastChild.textContent = state.offline ? "Εκτός σύνδεσης" : "Διαθέσιμο"; } }
+function paintStatus() { const st = $("#status"); if (st) st.textContent = state.offline ? "Εκτός σύνδεσης" : "Διαθέσιμο"; }
 /* ---------- team pyramid (home) ---------- */
 function layoutTree(people) {
   const kids = id => people.filter(p => p.manager_id === id);
@@ -1010,11 +999,9 @@ function homeView() {
   scheduleDraw();
   document.fonts?.ready.then(scheduleDraw);
   state.redraw = scheduleDraw;
-  const chatty = state.people.filter(p => p.can_chat);
   return h("div", { class: "home" },
     h("header", { class: "home-head" },
-      h("button", { class: "iconbtn menu-toggle", "aria-label": "Μενού", onclick: () => $("#app").classList.add("nav-open") }, icon(I.menu)),
-      h("div", {}, h("h1", {}, "Η ομάδα σου"), h("p", {}, chatty.length ? "Μίλα με το AI των προϊσταμένων σου. Η πρόσβαση είναι μόνο προς τα πάνω." : state.session.user.role_name === "ceo" ? "Βρίσκεσαι στην κορυφή της πυραμίδας. Η πρόσβαση στα AI είναι μόνο προς τους προϊσταμένους." : "Δεν υπάρχει διαθέσιμο AI προϊσταμένου για τον λογαριασμό σου."))),
+      h("button", { class: "iconbtn menu-toggle", "aria-label": "Μενού", onclick: () => $("#app").classList.add("nav-open") }, icon(I.menu))),
     h("div", { class: "home-body" }, stage,
       h("div", { class: "legend" }, h("span", {}, h("i", { class: "dot go" }), "Μπορείς να μιλήσεις"), h("span", {}, h("i", { class: "dot locked" }), "Μη διαθέσιμο για σένα · η αιτία γράφεται στην κάρτα"))));
 }

@@ -148,7 +148,12 @@ def import_person(src: Path, dst: Path) -> list[str]:
 
 
 def main() -> None:
-    src = Path(sys.argv[1] if len(sys.argv) > 1 else "../ZV/sources").expanduser().resolve()
+    if len(sys.argv) > 1:
+        src = Path(sys.argv[1]).expanduser().resolve()
+    else:
+        # Find a sibling ZV checkout even when MIRROR is nested one folder deeper (as on the team's desktop).
+        src = next((parent / "ZV" / "sources" for parent in ROOT.parents
+                    if (parent / "ZV" / "sources").is_dir()), ROOT.parent / "ZV" / "sources")
     for pid in PEOPLE:
         files = import_person(src / pid, OUT / pid)
         print(f"{pid}: {len(files)} αρχεία")
