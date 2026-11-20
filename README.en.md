@@ -2,7 +2,7 @@
 
 > **Netcompany Hackathon Athens 2026 · Challenge 1 — AI: Your digital self**
 >
-> *MIRROR*: a reflection of a person, with the evidence behind it.
+> **M.I.R.R.O.R.** = *Machine Intelligence Replicating Routine Operations & Responses*.
 >
 > 🇬🇷 Ελληνική έκδοση: [README.md](README.md). The app UI is in Greek.
 
@@ -19,36 +19,107 @@ It is deliberately *not* a chatbot with a persona prompt. The twin is built from
 
 Then we **prove** that it is really them: the **Fidelity Lab** tests the twin on decisions and replies it has never seen and compares it with a persona-prompt baseline.
 
+**Quick navigation:** [Quick start](#quick-start) · [Login → interactive walkthrough](#from-login-to-interactive-use) · [Judges and `.env`](#running-the-judges-with-the-full-env) · [Inheritance](#company-login-and-inheritance) · [Learning](#4-self-test-your-mirror-learns-from-you) · [Architecture](#architecture) · [Demo limits](#demo-limits-and-enterprise-potential) · [Troubleshooting](#docker-commands-and-troubleshooting)
+
 ---
+
+> **Status:** hackathon demo using synthetic data. It is not production-ready. The company, accounts, replies and evaluation results below are all part of the demo.
+
+![Annotated MIRROR team hierarchy showing the CEO, managers and employees](docs/screenshots/team-annotated.png)
+
+*Application screenshot: the CEO is at the top, managers have their own Mirrors, and employees do not have AI copies yet.*
 
 ## Quick start
 
 ```bash
-git clone <this repo> && cd mirror
-cp .env.example .env          # optional: add ANTHROPIC_API_KEY or OPENAI_API_KEY
-docker compose up --build
+git clone https://github.com/Agelosgalatas1/mirror-digital-twin.git
+cd mirror-digital-twin
+cp .env.example .env
+# Edit .env and fill the keys for the features you want.
+docker compose up --build -d
+docker compose ps
+docker compose logs -f mirror
 ```
 
-Open **http://localhost:8000**. That's it.
+Open **http://localhost:8000**. Stop the stack with `docker compose down`. Data stays in the `mirror-data` Docker volume. `docker compose down -v` also deletes the database and demo state.
 
-- **No key? It still works.** Without an LLM key, MIRROR runs its **offline rule-based engine** over a pre-computed persona snapshot. The UI, persona, decisions, nearest-neighbour replies, evaluation, privacy and control all work, so the container never fails because a key is missing.
-- **With a key** (`ANTHROPIC_API_KEY` → Claude `claude-opus-5-5`, or `OPENAI_API_KEY` → `gpt-5-mini`), you get generated replies, the self-critique loop, live persona extraction ("Rebuild persona"), LLM-as-judge and embeddings (OpenAI).
-- You can also paste a key **at runtime** from the UI (the status button at the bottom left). Keys stay in memory only.
-- **Fully local option:** `docker compose --profile local-llm up --build`, then `docker compose exec ollama ollama pull qwen2.5:7b`, and set `LLM_PROVIDER=ollama`, `OLLAMA_BASE_URL=http://ollama:11434` in `.env`.
+- **Offline demo:** the app starts from pre-computed persona snapshots without external keys. The UI, hierarchy and offline replies work; live LLM, ElevenLabs and Simli calls need their corresponding credentials.
+- **Full live demo:** configure one LLM provider (`OPENAI_API_KEY` or `ANTHROPIC_API_KEY`), `ELEVENLABS_API_KEY` for voice/transcription, and `SIMLI_API_KEY` for the human avatar. See [environment variables](#environment-variables-and-keys).
+- **Local LLM:** `docker compose --profile local-llm up --build -d`, then `docker compose exec ollama ollama pull qwen2.5:7b`; set `LLM_PROVIDER=ollama` and `OLLAMA_BASE_URL=http://ollama:11434` in `.env`. Voice/avatar still use their external services and keys.
 
-The first start seeds the **synthetic company NexaTech Solutions** (see below), so the demo works immediately. Data persists in the `mirror-data` Docker volume and is preserved when bundled demo files or snapshots change. Startup never resets a populated database. `docker compose down -v` deletes the data volume and is not an upgrade step.
+On first start, `AUTO_SEED=true` imports the synthetic NexaTech demo only when the database is empty. Changes to bundled files or snapshots do not reset a populated database. **There is no automatic data replay every 120 seconds.**
 
-Requirements: Docker with Compose v2 (Linux, macOS or Windows). The image is `python:3.12-slim-bookworm` with the frontend built in a `node:20-bookworm-slim` stage, and runs on amd64 and arm64.
+Requirements: Docker Engine/Desktop with Compose v2 on Linux, macOS or Windows. One container serves the API and frontend; the default host port is `8000` (`PORT` in `.env`).
+
+### Running the judges with the full `.env`
+
+The organizer will email each judge the complete `.env` file with the required keys. Save it in the project folder, then run:
+
+```bash
+docker compose up --build -d
+docker compose ps
+```
+
+Open `http://localhost:8000` and sign in with a [demo account](#demo-accounts-and-access).
+
+### Environment variables and keys
+
+| Key | Use |
+|---|---|
+| `OPENAI_API_KEY` | AI answers and persona extraction |
+| `ELEVENLABS_API_KEY` | Voice and transcription |
+| `SIMLI_API_KEY` | Live human avatar |
+
+> **Avatar limit:** With the resources available to the team, only **one Simli session can run at a time**.
+
+The `.env` is emailed directly to the judges and is not uploaded to GitHub.
 
 ---
 
+## Data preservation and rule publication
+
+- `AUTO_SEED=true` initializes an empty installation only. Changes to demo files or snapshots do not delete chats, passwords or existing profiles.
+- **Before a presentation:** open the self-test and company-rules section as the profile owner. Review each rule and publish only the rules intended for descendants to inherit.
+- Only company values and rules explicitly approved and published by their owner are inherited. Personal memories and original evidence remain private.
+- To intentionally reset the demo database, the CEO uses the in-app reset action. A backup is created first.
+
 ## Company, login and inheritance
 
-The demo company is **NexaTech Solutions** (fictional B2B technology supplier), built from our team's synthetic datasets (ZV repo, `sources/`). A three-level pyramid as in ZV: **Danai Karra (CEO)**; **Alexandros Petrou (Sales Manager)** and **Myrto Antoniou (Finance Manager)** reporting only to her; and under them **Nikos Dimitriou (Sales Employee)** and **Eleni Nikolaou (Finance Employee)**. Employees have no AI of their own yet: they chat with their manager's Mirror and the CEO's.
+The demo company is **NexaTech Solutions** (fictional B2B technology supplier), using synthetic datasets from the ZV repo (`sources/`):
 
-- **Everyone has their own AI counterpart (a "Mirror")** and their own memory; a manager never sees the other manager's data.
-- **Inheritance:** a manager's Mirror inherits only company values and decision rules explicitly reviewed and published by the CEO (no exclusivity deals, >12% discount and net90 only by the CEO, a human always sends the final offer). On conflict the CEO's rule wins and the AI says where it came from. The CEO's personal rules are not inherited.
-- **Upward-only access, enforced on the server:** a manager chats with the CEO's Mirror, never sideways. The CEO is at the top, so she runs the **self-test** on her own Mirror.
+```text
+Danai (CEO)
+├──→ Alexandros (Sales) ──→ Nikos (Sales Employee)
+└──→ Myrto (Finance) ──→ Eleni (Finance Employee)
+```
+
+Employees do not yet have their own AI; they chat with their manager's Mirror and the CEO's.
+
+```mermaid
+flowchart TB
+  CEO["Danai · CEO · Mirror"]
+  Sales["Alexandros · Sales Manager · Mirror"]
+  Finance["Myrto · Finance Manager · Mirror"]
+  SalesEmployee["Nikos · Sales Employee · no Mirror"]
+  FinanceEmployee["Eleni · Finance Employee · no Mirror"]
+  CEO -->|reporting line| Sales
+  CEO -->|reporting line| Finance
+  Sales -->|reporting line| SalesEmployee
+  Finance -->|reporting line| FinanceEmployee
+  CEO -.->|published company values and rules only| Sales
+  CEO -.->|published company values and rules only| Finance
+```
+
+Solid arrows show reporting lines. Dashed arrows show inheritance of company-scope values and decision rules only. Chat access goes upward: employees can reach their manager and the CEO, while managers can reach the CEO; there is no sideways or downward access.
+
+- The **CEO and two managers have their own AI Mirror and memory**; a manager cannot see the other manager’s data. Employees do not have their own AI copy yet.
+- **Inheritance:** a manager's Mirror inherits only the CEO's company values and rules that she explicitly approves and publishes. Published CEO rules take precedence over local rules; her private memories and personal rules are not inherited.
+- In practice, only **company-scope values and decision rules** pass down the reporting chain. Traits marked `personal` stay with their owner. Inherited items are read-only in a manager profile, keep their source/evidence, and are placed before that manager’s own rules so company policy wins a conflict.
+- **Upward-only access, enforced on the server:** employees can chat with their manager’s Mirror and the CEO’s; managers can chat with the CEO’s Mirror, never sideways or downward. The CEO is at the top, so she runs the **self-test** on her own Mirror.
+
+### Demo accounts and access
+
+These credentials are for this synthetic demo only.
 
 | Role | Username | Email | Password |
 |---|---|---|---|
@@ -60,7 +131,47 @@ The demo company is **NexaTech Solutions** (fictional B2B technology supplier), 
 
 Passwords are stored as PBKDF2 hashes. The session is an `HttpOnly`, `SameSite=Strict` cookie and every write also needs the `X-Mirror-Request` header (CSRF guard); API clients may use `Authorization: Bearer <token>`.
 
-**Data** (`python scripts/import_zv.py <ZV>/sources` → `backend/data/demo/<person>/`, 100% synthetic): per person 10 emails (.eml), Teams chats, notes, policies (SALE-DISC v1/v2, FIN-CREDIT v1/v2, FIN-PROC-03), memos, meeting minutes, call transcripts, the 2026 decision log, CRM/ERP workflow logs, draft-vs-final texts and two personality-seed emails. `eval/holdout.json` is **never ingested**: the 12 November 2026 examples (4 decisions, 3 replies) plus 4 knowledge and 3 must-say-"I don't know" questions. The shipped persona models (`backend/data/snapshot/`) were extracted from this data with `python -m tools.build_snapshots`, so the demo also works without a key.
+**Data** (`python scripts/import_zv.py <ZV>/sources` → `backend/data/demo/<person>/`, 100% synthetic): per person 10 emails (.eml), Teams chats, notes, policies (SALE-DISC v1/v2, FIN-CREDIT v1/v2, FIN-PROC-03), memos, meeting minutes, call transcripts, the 2026 decision log, CRM/ERP workflow logs, draft-vs-final texts and two personality-seed emails. The shipped persona models (`backend/data/snapshot/`) were extracted from this data with `python -m tools.build_snapshots`, so the demo also works without a key.
+
+## From login to interactive use
+
+![Five MIRROR screenshots: login, team, interactive conversation, evidence, and self-test](docs/screenshots/workflow-annotated.png)
+
+*A visual guide to the five main screens. All people and content shown are synthetic NexaTech demo data.*
+
+### 1. Sign in
+
+After Docker is running, open `http://localhost:8000` and sign in with one of the demo username/password pairs in [Demo accounts and access](#demo-accounts-and-access). For example, use `sales_manager` / `sales2026`. API keys are configured on the server in `.env`; they are not entered on the sign-in page or exposed in the frontend.
+
+### 2. Choose a Mirror from the team
+
+The pyramid shows people, roles and reporting lines. Choose a card with chat access and click **Συνομίλησε** (Chat). Access follows the hierarchy upward; for example, the Sales Manager can talk to the CEO's Mirror. If sign-in restores a saved conversation, click **Πίσω στην ομάδα** (Back to team) to return to the pyramid.
+
+### 3. Ask and continue a conversation
+
+Click a suggested question or type your own in the message box and press the arrow/Enter. Try **“Ποιος εγκρίνει έκπτωση 14%;”** (“Who approves a 14% discount?”). In the screenshot, the answer is “Me. (>12% → CEO)” and includes confidence, persona traits and follow-up options. Each Mirror answers from its own data and rules; ask **“γιατί;”** (“why?”) to request the reasoning.
+
+The **Ύφος** (Style) menu changes the writing context (team chat, personal chat or email). Conversations are saved for the signed-in user and can be reopened from the left sidebar. Thumbs-up/down feedback rates how closely an answer matches; it does **not train** the model by itself.
+
+### 4. Inspect the evidence
+
+Click **3 αποδείξεις** (3 pieces of evidence) on an answer (the number varies). The panel lists the persona traits and stored messages or documents that supported the answer. Close it with **Εντάξει** (OK) or **×** to return to the chat. Check the source before relying on an answer.
+
+### 5. Optional voice and avatar
+
+- **Voice:** choose Voice to hear the answer. For a microphone question, MIRROR transcribes it first so you can review the text before sending.
+- **Avatar:** choose Avatar for a live talking face and voice. This requires `ELEVENLABS_API_KEY` and `SIMLI_API_KEY` in `.env`.
+- **Voice avatar:** the checkbox starts a hands-free listening-and-answer loop; the browser asks for microphone permission when you enable it.
+
+The current Simli subscription supports **one active human-avatar session at a time**. If the service is busy, the app retries once, then continues with audio and no video. External calls use the organizer's keys and are subject to the providers' quotas and charges.
+
+### 6. Check and correct your own Mirror
+
+Open **Self-test** from your own card in the pyramid. Choose a topic, write a question or ask AI to generate one. **Answer first**, then compare the Mirror's answer and mark whether it is correct. Add a correction when needed: it is saved as owner-verified knowledge and can be undone in the same window.
+
+### Demo note
+
+All people, documents, conversations and accounts shown in the screenshots are fictional. MIRROR is a drafting and decision-support demo, not an autonomous decision-maker: inspect the evidence and keep final approvals with a human.
 
 ## Features
 
@@ -74,12 +185,25 @@ Passwords are stored as PBKDF2 hashes. The session is an `HttpOnly`, `SameSite=S
 
 ### 3. Text · Voice · Avatar · Voice avatar
 - **Voice:** with `ELEVENLABS_API_KEY` each person answers in their own ElevenLabs voice (Sophia, Eric, Zenia); the 🎤 transcribes with ElevenLabs Scribe and shows the transcript for review before sending.
-- **Avatar:** with `SIMLI_API_KEY` a live Simli face (Kate, Hank, Zahra) speaks the same audio with lip-sync. The browser only gets a short-lived token for **one checked answer**, under a local daily budget (`SIMLI_DAILY_SECONDS`); on any failure the answer plays as audio.
+- **Avatar:** with `SIMLI_API_KEY`, a Simli face (Kate, Hank, Zahra) speaks the same answer with lip sync. The server sends the browser a short-lived session token for **one checked answer**, within the local daily budget (`SIMLI_DAILY_SECONDS`). The current Simli subscription supports **one active human-avatar session at a time**. When Simli reports the session is busy, the UI waits once for the previous short answer; if it still cannot start, audio continues without video. The avatar does not stream an open microphone.
 - **Voice avatar:** hands-free conversation: an orb listens, detects the pause, answers aloud and listens again until paused.
 
 ### 4. Self-test: your Mirror learns from you
 - Pick a topic or write your own question; **you answer first**, then compare with your AI's answer and mark it right or wrong.
-- A **correction becomes owner-verified knowledge** in your profile and is used from then on; every correction can be undone. Three right answers in a row mark a topic **verified**.
+- When the answer is wrong and you enter a correction, it becomes **owner-verified knowledge** in your profile and can be used immediately in later answers. You can undo the entry.
+- Three consecutive correct self-test answers mark that topic as verified.
+- Regular 👍/👎 conversation feedback is stored for evaluation; it **does not train** the model by itself. The project does not fine-tune model weights. New source files need to be ingested with consent, and AI persona extraction requires an explicit profile rebuild.
+
+### Data updates and learning
+
+| Action | What happens in this demo |
+|---|---|
+| Startup with an empty database | `AUTO_SEED=true` imports synthetic NexaTech data and loads the shipped persona snapshots. |
+| Demo files change | Existing database state is preserved; demo reset requires an explicit owner action. |
+| Owner correction in self-test | Saved as owner-verified knowledge for later answers; it can be undone. |
+| 👍/👎 on a conversation answer | Recorded as feedback. It does not update the persona model or LLM weights on its own. |
+| Add a source | Ingested with consent, PII-redacted, chunked and indexed. AI persona rebuilding is explicit, not automatic training. |
+| Automatic data replay every 120 seconds | **Not implemented in this demo.** Frontend timers and heartbeats serve UI/audio sessions, not data replay or Mirror training. |
 
 ### 5. Persona model (behind the scenes)
 - Values, knowledge, preferences, **decision rules** (when, prefers, avoids, numeric thresholds, company/personal **scope**), relationships, voice and unknowns, each backed by the messages that prove it; per-channel style fingerprints; versions and owner edits via `/api/profile*`.
@@ -97,18 +221,6 @@ A **temporal hold-out** split off before ingestion, so the twin is tested only o
 | **Honest abstention** | Questions she never answered must get "I don't know" (or a boundary): a twin that invents opinions is an impersonation risk |
 | **Human blind test** | People guess which reply is the real one; the fool rate is tracked |
 
-Offline results on the demo persona (rule-based engine, no LLM), reproducible with `docker compose up` → Fidelity lab → Run:
-
-| | Twin | Persona-prompt baseline |
-|---|---|---|
-| Held-out decisions predicted | **100%** | 16.7%* |
-| Reply closeness to the real reply | **70.7%** | 49.1%* |
-| Knowledge recall | **100%** | – |
-| Honest abstention | **100%** | – |
-| Fidelity index | **92.7** | – |
-
-\* Offline, the baseline is a trivial "first option / generic polite reply". With an LLM configured, the baseline is the **same LLM** with a persona prompt and the judge win rate is added. Run it with your key to get live numbers.
-
 ### 7. Privacy (built in)
 - **The twin never sends anything**: it drafts, and the owner decides what to copy and send.
 - **Boundaries**: health, personal finances, politics/religion and relationships get "I'd rather answer that myself".
@@ -116,7 +228,7 @@ Offline results on the demo persona (rule-based engine, no LLM), reproducible wi
 - **Disclosure** footer on drafts ("Drafted by a digital twin · reviewed by its owner"), to counter impersonation.
 - **Audit log** of every twin and owner action (API keys are never logged).
 - Only **redacted** text ever reaches an LLM. Raw uploads are discarded after parsing. Storage is local SQLite in a Docker volume.
-- An **Ollama profile** keeps everything on-premise.
+- With Ollama, LLM requests can run locally. If ElevenLabs or Simli is enabled, the corresponding data/text is sent to those providers.
 
 ---
 
@@ -165,85 +277,37 @@ flowchart LR
 ### Design choices
 - **Structured outputs everywhere.** The twin returns JSON (answer, why, trait_refs, memory_refs, confidence, unsure), so every claim is traceable and the UI can show *why*.
 - **Measure style with numbers, not with the LLM.** Stylometry is deterministic, so it can be a fair metric and a guardrail at the same time.
-- **Graceful degradation.** Anthropic → OpenAI → Ollama → offline. The container never fails because a key is missing, and every feature has an offline path.
+- **Graceful fallback for LLM text.** Anthropic → OpenAI → Ollama → offline. The app starts without an LLM key; voice and avatar need ElevenLabs/Simli keys.
 - **Evidence-first persona.** A trait with no surviving evidence is dropped, which makes the right to be forgotten real.
 - **No fine-tuning on purpose.** RAG + profile extraction keeps the twin current (new data → rebuild → diff), auditable and deletable; fine-tuned weights can't forget.
 
 ---
 
-## API (selection)
+## Demo limits and enterprise potential
 
-| Method | Path | |
-|---|---|---|
-| GET | `/api/status` | Provider, counts, profile version, running jobs |
-| POST | `/api/sources` (multipart) | Ingest a file |
-| PATCH / DELETE | `/api/sources/{id}` | Consent toggle / forget |
-| GET | `/api/profile` | Current persona model (evidence-filtered) |
-| POST | `/api/profile/build` | Rebuild the persona (background job) |
-| PATCH / POST | `/api/profile/traits[/{id}]` | Owner verify / edit / delete / add |
-| POST | `/api/twin/ask` · `/write` · `/decide` | Twin actions |
-| POST | `/api/twin/baseline` | Persona-prompt baseline for comparison |
-| POST | `/api/eval/run` · GET `/api/eval/latest` | Fidelity lab |
-| GET / POST | `/api/blind` | Human blind test |
-| GET / PUT | `/api/privacy` | PII report, boundaries, disclosure |
-| GET | `/api/audit` | Audit log |
+This repository demonstrates the idea with one fictional company, five synthetic people, three Mirrors, a local SQLite database and one default Docker service. The evaluation hold-out is small and synthetic. It is not a finished HR product, enterprise identity system, multi-tenant SaaS deployment or production security review.
 
-Interactive docs: **http://localhost:8000/docs**.
+With the right engineering team, budget and infrastructure, the concept could grow into a large-company org chart with Mirrors for many roles. That next stage would require deliberate work such as HRIS/identity integrations, SSO and MFA, tenant boundaries, fine-grained policy and access controls, a production database and job queue, scalable retrieval, monitoring, backups, audit retention, cost/rate limits, incident response and privacy/legal review. Those are future requirements, not features claimed by this demo.
 
-## Tests
+## Docker commands and troubleshooting
 
-```bash
-docker compose run --rm mirror python -m pytest -q
-```
+| Need or symptom | Command / check |
+|---|---|
+| Start or rebuild the container | `docker compose up --build -d` |
+| Check status and health | `docker compose ps` |
+| Follow server logs | `docker compose logs -f mirror`; press `Ctrl+C` to stop following |
+| Apply `.env` changes | `docker compose up -d --build --force-recreate mirror` |
+| Stop without deleting data | `docker compose down` |
+| Reset the database and demo data | `docker compose down -v`; this deletes that installation’s history/state |
+| `localhost:8000` does not open | Run `docker compose ps` and `docker compose logs -f mirror`; wait for the health check. If the port is occupied, set `PORT=8080` in `.env`, recreate the service and open `http://localhost:8080`. |
+| API works but live AI is offline | Confirm that at least one LLM provider key is set in `.env`, then run `docker compose up -d --build --force-recreate mirror`. |
+| Voice or avatar is missing | Check `ELEVENLABS_API_KEY` / `SIMLI_API_KEY` and their provider account limits. The avatar plan permits one active session at once; audio remains the fallback. |
+| Need to reset the demo data | Use the explicit in-app reset as CEO; a normal restart preserves data. Each machine has its own `mirror-data` volume. |
+| Need to see server errors | `docker compose logs -f mirror`; press `Ctrl+C` to stop following logs. |
 
-The tests cover PII detectors and checksums, parsers, boundaries, stylometry, the end-to-end offline twin (ask / decide / write / approve-with-edits), forgetting a source removing its traits, and the twin beating the baseline on the hold-out set.
-
-## Project structure
-
-```
-mirror/
-├── docker-compose.yml · Dockerfile · .env.example
-├── backend/
-│   ├── app/            # FastAPI app (see table above)
-│   ├── data/demo/      # synthetic footprint + held-out evaluation set
-│   ├── data/snapshot/  # pre-computed persona model for instant / offline demo
-│   └── tests/
-├── frontend/           # web app (HTML/CSS/JS, Greek) + Simli avatar
-├── scripts/import_zv.py  # imports the NexaTech datasets from ZV
-├── backend/tools/      # build_snapshots (LLM persona models), evaluate (fidelity)
-├── PITCH.md            # pitch & demo script (Greek) · PITCH.en.md (English)
-└── README.md           # Greek README · README.en.md (English)
-```
+`http://localhost:8000` is each judge’s local address; Docker Compose does not create a public domain, tunnel or TLS endpoint. External access depends on the host, firewall/router and network configuration. A shared hosted demo needs a reachable host, secure access and secrets configured there.
 
 ## Responsible AI notes
 - Synthetic data only; no real person's data is included.
 - The twin is a drafting and decision-support tool for its **owner**. It never acts autonomously, discloses itself, abstains on unknown or sensitive topics, and every action is audited.
 - GDPR principles applied: data minimisation (redaction, no raw-file retention), purpose limitation (owner-only twin), consent per source, erasure (forget source → traits disappear), transparency (evidence and why on every answer).
-
-## Data preservation and explicit publication
-
-Startup seeds only an empty installation. Existing sources, chats, profiles,
-identities and passwords survive changes to the bundled demo and snapshots.
-Only the CEO may explicitly reset the demo through `POST /api/reset-demo` with
-`{"confirmation":"RESET_DEMO"}`. A consistent SQLite backup is created under
-`/data/backups/` before this destructive operation.
-
-To prepare the demo, each owner opens their own self-test and expands
-**Εταιρικοί κανόνες για την ομάδα**. Review each rule and click
-**Έγκριση και δημοσίευση**. No bundled snapshot or AI output is automatically
-approved. Only explicitly company-scoped values and decision rules can be
-published; approval is a separate server record bound to the exact reviewed
-content and evidence. Editing a rule requires reapproval. Use
-**Ανάκληση δημοσίευσης** to withdraw it.
-
-Consulting an ancestor's Mirror uses only these public rules, without the
-ancestor's raw memory, source citations, private profile or style examples.
-Evaluations and jobs are owner-only. Legacy or revoked shared conversation
-content and audio are excluded from retrieval and replay, without deleting
-stored data. Normal chat, voice and feedback do not publish or train rules.
-
-API: `POST /api/profile/traits/{id}/publication` takes `published` and the
-`content_hash` supplied by the owner's `/api/self-test` company-rule review.
-Missing or stale review hashes fail closed. Owner-created traits default to
-personal; set `scope=company` explicitly when adding an eligible rule, then
-review and publish it separately.
