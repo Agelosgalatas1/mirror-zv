@@ -19,7 +19,7 @@ from fastapi.responses import Response
 from pydantic import BaseModel, Field
 
 from . import db, profile, twin, voice
-from .auth import allowed_targets, current_user
+from .auth import allowed_targets, current_user, has_ai
 from .context import as_person
 from .ingest import pipeline
 from .llm import LLM_CLIENT
@@ -54,7 +54,7 @@ def user_view(row: dict) -> dict:
 
 def chat_mirrors(user: dict) -> list[dict]:
     """The Mirrors this user may chat with: everyone they report to (never their own, never sideways)."""
-    return [{"id": t, "title": pipeline.owner_dict(t)["name"]} for t in allowed_targets(user["id"])[1:]]
+    return [{"id": t, "title": pipeline.owner_dict(t)["name"]} for t in allowed_targets(user["id"]) if t != user["id"]]
 
 
 def session_payload(user: dict) -> dict:
@@ -114,10 +114,12 @@ def hierarchy(user: dict = Depends(current_user)):
         else:
             rel = "other_line"
         can = r["id"] in allowed
-        reason = None if can else "self" if rel == "self" else rel if rel in ("below", "other_line") else "not_permitted"
+        ai = has_ai(r["id"])
+        reason = None if can else "no_ai" if not ai else "self" if rel == "self" else \
+            rel if rel in ("below", "other_line") else "not_permitted"
         v = user_view(r)
         out.append({"id": r["id"], "name": v["name"], "job_title": v["job_title"], "role_name": v["role_name"],
-                    "department": v["department"], "manager_id": r.get("reports_to"), "mirror_id": r["id"],
+                    "department": v["department"], "manager_id": r.get("reports_to"), "mirror_id": r["id"] if ai else None,
                     "can_chat": can, "is_me": rel == "self", "relation": rel, "reason": reason})
     return out
 
@@ -413,6 +415,8 @@ def _own_profile() -> dict:
 
 
 def self_test_state(user: dict) -> dict:
+    if not has_ai(user["id"]):
+        raise HTTPException(409, "Δεν έχεις δικό σου AI αντίγραφο για self-test.")
     with as_person(user["id"]):
         prof = _own_profile()
     events = db.query("SELECT * FROM self_test_events WHERE person_id=? ORDER BY id DESC LIMIT 60", (user["id"],))

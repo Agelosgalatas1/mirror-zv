@@ -44,7 +44,7 @@ Requirements: Docker with Compose v2 (Linux, macOS or Windows). The image is `py
 
 ## Company, login and inheritance
 
-The demo company is **NexaTech Solutions** (fictional B2B technology supplier), built from our team's synthetic datasets (ZV repo, `sources/`). A three-person pyramid: **Danai Karra (CEO)**, with **Alexandros Petrou (Sales Manager)** and **Myrto Antoniou (Finance Manager)** reporting only to her.
+The demo company is **NexaTech Solutions** (fictional B2B technology supplier), built from our team's synthetic datasets (ZV repo, `sources/`). A three-level pyramid as in ZV: **Danai Karra (CEO)**; **Alexandros Petrou (Sales Manager)** and **Myrto Antoniou (Finance Manager)** reporting only to her; and under them **Nikos Dimitriou (Sales Employee)** and **Eleni Nikolaou (Finance Employee)**. Employees have no AI of their own yet: they chat with their manager's Mirror and the CEO's.
 
 - **Everyone has their own AI counterpart (a "Mirror")** and their own memory; a manager never sees the other manager's data.
 - **Inheritance:** a manager's Mirror inherits the CEO's company values and decision rules (no exclusivity deals, >12% discount and net90 only by the CEO, a human always sends the final offer). On conflict the CEO's rule wins and the AI says where it came from. The CEO's personal rules are not inherited.
@@ -55,6 +55,8 @@ The demo company is **NexaTech Solutions** (fictional B2B technology supplier), 
 | CEO | `ceo` | `d.karra@nexatech.example` | `ceo2026` |
 | Sales Manager | `sales_manager` | `a.petrou@nexatech.example` | `sales2026` |
 | Finance Manager | `finance_manager` | `m.antoniou@nexatech.example` | `finance2026` |
+| Sales Employee | `sales_employee` | `n.dimitriou@nexatech.example` | `employee2026` |
+| Finance Employee | `finance_employee` | `e.nikolaou@nexatech.example` | `employee2026` |
 
 Passwords are stored as PBKDF2 hashes. The session is an `HttpOnly`, `SameSite=Strict` cookie and every write also needs the `X-Mirror-Request` header (CSRF guard); API clients may use `Authorization: Bearer <token>`.
 

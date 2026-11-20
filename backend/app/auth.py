@@ -49,9 +49,15 @@ async def current_user(request: Request) -> dict:
     return row
 
 
+def has_ai(person_id: str) -> bool:
+    """Employees in the demo company have no AI counterpart of their own (as in the team's ZV build)."""
+    row = pipeline.person_row(person_id)
+    return bool(row) and (row.get("meta") or {}).get("has_ai", True) is not False
+
+
 def allowed_targets(person_id: str) -> list[str]:
     """A person can use their own twin and the twins of everyone they report to, nothing sideways."""
-    return [person_id, *pipeline.ancestors(person_id)]
+    return [p for p in (person_id, *pipeline.ancestors(person_id)) if has_ai(p)]
 
 
 def check_target(user: dict, target: str | None) -> str:

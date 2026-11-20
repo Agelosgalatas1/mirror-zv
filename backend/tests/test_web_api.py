@@ -95,3 +95,21 @@ def test_self_test_learns_from_a_correction_and_can_undo():
         c.post(f"/api/self-test/events/{ans['event_id']}/undo", json={}, headers=H)
         with as_person("finance"):
             assert not any("12 μηνών" in (t.get("text") or "") for t in profile.current()["knowledge"])
+
+
+def test_employees_have_no_ai_and_talk_upwards_only():
+    with TestClient(app) as c:
+        s = web_login(c, "sales_employee", "employee2026")
+        assert s["user"]["manager_id"] == "sales"
+        assert [m["id"] for m in s["mirrors"]] == ["sales", "ceo"]          # their manager first, then the CEO
+        rows = {p["id"]: p for p in c.get("/api/hierarchy").json()}
+        assert rows["sales_employee"]["is_me"] and rows["sales_employee"]["mirror_id"] is None
+        assert rows["sales"]["relation"] == "manager" and rows["ceo"]["relation"] == "above"
+        assert not rows["finance"]["can_chat"] and rows["finance_employee"]["reason"] == "no_ai"
+        assert c.post("/api/mirrors/finance/ask", json={"question": "Γεια"}, headers=H).status_code == 403
+        assert c.post("/api/mirrors/sales/ask", json={"question": "Ποιος εγκρίνει έκπτωση 8%;"}, headers=H).json()["answer"]
+        assert c.get("/api/self-test").status_code == 409
+        # a manager sees the employee below, without an AI to talk to
+        web_login(c, "finance_manager", "finance2026")
+        rows = {p["id"]: p for p in c.get("/api/hierarchy").json()}
+        assert rows["finance_employee"]["reason"] == "no_ai" and not rows["finance_employee"]["can_chat"]

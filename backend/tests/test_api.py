@@ -22,7 +22,8 @@ def test_login_required_and_wrong_password_rejected():
         assert c.post("/api/login", json={"username": SALES[0], "password": "wrong"}).status_code == 401
         org = c.get("/api/org").json()
         roles = {p["id"]: p["reports_to"] for p in org["persons"]}
-        assert roles == {"ceo": None, "sales": "ceo", "finance": "ceo"}
+        assert roles == {"ceo": None, "sales": "ceo", "finance": "ceo", "sales_employee": "sales",
+                         "finance_employee": "finance"}
         assert org["company"] == "NexaTech Solutions"
         # e-mail works as well as the username
         assert c.post("/api/login", json={"email": "a.petrou@nexatech.example", "password": "sales2026"}).status_code == 200

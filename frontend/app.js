@@ -138,7 +138,7 @@ function loginView() {
     } },
       h("div", { class: "field" }, h("label", { for: "u" }, "Όνομα χρήστη"), user),
       h("div", { class: "field" }, h("label", { for: "p" }, "Κωδικός"), pass), err, btn),
-    h("p", { class: "hint" }, "Demo (NexaTech Solutions): ceo / ceo2026 · sales_manager / sales2026 · finance_manager / finance2026")));
+    h("p", { class: "hint" }, "Demo (NexaTech): ceo / ceo2026 · sales_manager / sales2026 · finance_manager / finance2026 · sales_employee, finance_employee / employee2026")));
 }
 
 /* ---------- conversation flow ---------- */
@@ -743,6 +743,7 @@ const DEPARTMENTS = { executive: "Διοίκηση", sales: "Πωλήσεις", 
 const RELATIONS = { manager: "Ο άμεσος προϊστάμενός σου", above: "Ανώτερος στη γραμμή αναφοράς σου" };
 const REASONS = {
   self: "Εσύ · πάτησε για self-test και επαλήθευση",
+  self_no_ai: "Εσύ · δεν έχεις ακόμα δικό σου AI αντίγραφο· μιλάς με το AI των προϊσταμένων σου",
   no_ai: "Δεν έχει AI αντίγραφο",
   below: "Αναφέρεται σε σένα · η συνομιλία γίνεται μόνο προς τα πάνω",
   other_line: "Άλλη γραμμή αναφοράς · μιλάς μόνο με τους προϊσταμένους σου",
@@ -896,9 +897,9 @@ function talkTo(p) {
 }
 function personCard(p, extraClass = "") {
   const me = p.is_me ?? p.id === state.session.user.employee_id;
-  const note = personNote({ ...p, reason: me ? "self" : p.reason });
+  const note = personNote({ ...p, reason: me ? (p.mirror_id ? "self" : "self_no_ai") : p.reason });
   const silent = silentEmployeeAccess(p);
-  const pill = me ? h("span", { class: "pill go" }, icon(I.chat, 13), "Self-test")
+  const pill = me ? (p.mirror_id ? h("span", { class: "pill go" }, icon(I.chat, 13), "Self-test") : null)
     : p.can_chat ? h("span", { class: "pill go" }, icon(I.chat, 13), "Συνομίλησε")
     : p.mirror_id ? h("span", { class: "pill locked" }, icon(I.lock, 12), "Μη διαθέσιμο") : null;
   const dept = DEPARTMENTS[(p.department || "").toLowerCase()];

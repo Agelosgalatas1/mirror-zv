@@ -9,6 +9,7 @@ import sys
 
 from app import db, evaluation
 from app.context import as_person
+from app.auth import has_ai
 from app.llm import LLM_CLIENT
 from app.main import bootstrap
 
@@ -22,7 +23,7 @@ def main() -> None:
     if "--offline" in sys.argv:
         LLM_CLIENT.configure("offline")
     bootstrap()
-    people = [r["id"] for r in db.query("SELECT id FROM persons ORDER BY CASE WHEN reports_to IS NULL THEN 0 ELSE 1 END, id")]
+    people = [r["id"] for r in db.query("SELECT id FROM persons ORDER BY rowid") if has_ai(r["id"])]
     results = {}
     for p in people:
         with as_person(p):

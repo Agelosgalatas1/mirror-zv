@@ -44,19 +44,22 @@ docker compose up --build
 
 ## Η εταιρεία, η σύνδεση και η κληρονομικότητα
 
-Η demo εταιρεία είναι η **NexaTech Solutions** (φανταστική, B2B τεχνολογία και εξοπλισμός), με τα συνθετικά datasets της ομάδας μας (repo ZV, φάκελος `sources/`). Πυραμίδα διοίκησης τριών ατόμων:
+Η demo εταιρεία είναι η **NexaTech Solutions** (φανταστική, B2B τεχνολογία και εξοπλισμός), με τα συνθετικά datasets της ομάδας μας (repo ZV, φάκελος `sources/`). Πυραμίδα τριών επιπέδων, όπως στο ZV:
 
 ```
-                 Δανάη Καρρά — CEO
-               /                    \
-  Αλέξανδρος Πέτρου —          Μυρτώ Αντωνίου —
-     Sales Manager               Finance Manager
+                       Δανάη Καρρά — CEO
+                     /                    \
+     Αλέξανδρος Πέτρου —              Μυρτώ Αντωνίου —
+        Sales Manager                   Finance Manager
+             |                                |
+     Νίκος Δημητρίου —                Ελένη Νικολάου —
+        Sales Employee                  Finance Employee
 ```
 
-- Οι δύο managers **αναφέρονται μόνο στην CEO**, όχι ο ένας στον άλλον.
-- **Κάθε πρόσωπο έχει το δικό του AI αντίγραφο (Mirror)** και τη δική του μνήμη. Ένας manager δεν βλέπει ποτέ τα δεδομένα του άλλου.
+- Οι δύο managers **αναφέρονται μόνο στην CEO**, και κάθε employee μόνο στον manager του.
+- **Η CEO και οι managers έχουν το δικό τους AI αντίγραφο (Mirror)** και τη δική τους μνήμη. Ένας manager δεν βλέπει ποτέ τα δεδομένα του άλλου. Οι employees, όπως στο ZV, δεν έχουν ακόμα δικό τους AI.
 - **Κληρονομικότητα:** το Mirror κάθε manager κληρονομεί τις αξίες και τους κανόνες της εταιρείας από την CEO (π.χ. «όχι αποκλειστικότητες», «>12% έκπτωση και net90 μόνο από την CEO», «η τελική προσφορά φεύγει πάντα από άνθρωπο»), μαζί με τους δικούς του. Όταν συγκρούονται, **υπερισχύει ο κανόνας της CEO** και το AI λέει από πού ήρθε. Οι προσωπικοί κανόνες της CEO δεν κληρονομούνται.
-- **Πρόσβαση μόνο προς τα πάνω:** ο manager μιλά με το Mirror της CEO («τι θα αποφάσιζε η Δανάη;»), όχι με του άλλου manager. Η CEO βρίσκεται στην κορυφή: δεν έχει προϊσταμένους, οπότε κάνει **self-test** στο δικό της AI. Οι κανόνες ελέγχονται στον server, όχι στον browser.
+- **Πρόσβαση μόνο προς τα πάνω:** ο employee μιλά με το Mirror του manager του και της CEO, ο manager με το Mirror της CEO, κανείς δεν μιλά με κάποιον στο πλάι ή από κάτω. Η CEO βρίσκεται στην κορυφή, οπότε κάνει **self-test** στο δικό της AI (όπως και οι managers στο δικό τους). Οι κανόνες ελέγχονται στον server, όχι στον browser.
 
 **Demo λογαριασμοί** (όνομα χρήστη ή email, και κωδικός):
 
@@ -65,6 +68,8 @@ docker compose up --build
 | CEO | `ceo` | `d.karra@nexatech.example` | `ceo2026` |
 | Sales Manager | `sales_manager` | `a.petrou@nexatech.example` | `sales2026` |
 | Finance Manager | `finance_manager` | `m.antoniou@nexatech.example` | `finance2026` |
+| Sales Employee | `sales_employee` | `n.dimitriou@nexatech.example` | `employee2026` |
+| Finance Employee | `finance_employee` | `e.nikolaou@nexatech.example` | `employee2026` |
 
 Οι κωδικοί αποθηκεύονται ως hash (PBKDF2). Η σύνδεση κρατιέται σε cookie `HttpOnly` / `SameSite=Strict`, και κάθε αλλαγή απαιτεί επιπλέον το header `X-Mirror-Request` (προστασία CSRF). Για API clients δουλεύει και `Authorization: Bearer <token>`.
 

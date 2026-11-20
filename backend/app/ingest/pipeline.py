@@ -64,7 +64,8 @@ def upsert_person(p: dict) -> None:
          hash_password(login["password"]) if login.get("password") else None,
          json.dumps({"aliases": p.get("aliases", []), "emails": p.get("emails", []),
                      "org_domain": p.get("org_domain", ""), "department": p.get("department", ""),
-                     "username": (login.get("username") or "").lower()}, ensure_ascii=False)))
+                     "username": (login.get("username") or "").lower(),
+                     "has_ai": p.get("has_ai", True)}, ensure_ascii=False)))
 
 
 def ancestors(person_id: str) -> list[str]:
