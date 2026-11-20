@@ -32,8 +32,8 @@
 ## Γρήγορη εκκίνηση
 
 ```bash
-git clone https://github.com/Agelosgalatas1/mirror-digital-twin.git
-cd mirror-digital-twin
+git clone https://github.com/Agelosgalatas1/mirror-zv.git
+cd mirror-zv
 cp .env.example .env
 # Άνοιξε το .env και συμπλήρωσε τα keys που αντιστοιχούν στις λειτουργίες που θέλεις.
 docker compose up --build -d

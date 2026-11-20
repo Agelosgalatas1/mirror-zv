@@ -32,8 +32,8 @@ Then we **prove** that it is really them: the **Fidelity Lab** tests MIRROR on d
 ## Quick start
 
 ```bash
-git clone https://github.com/Agelosgalatas1/mirror-digital-twin.git
-cd mirror-digital-twin
+git clone https://github.com/Agelosgalatas1/mirror-zv.git
+cd mirror-zv
 cp .env.example .env
 # Edit .env and fill the keys for the features you want.
 docker compose up --build -d
