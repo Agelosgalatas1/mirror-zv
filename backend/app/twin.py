@@ -52,7 +52,9 @@ def persona_digest(prof: dict) -> str:
                 continue
             src = t.get("inherited_from")
             tag = f" [INHERITED from {src['name']}, {src['role']}: company rule, overrides personal rules]" if src else ""
-            out.append(f"- {t['id']}{tag}: {t.get(key) or t.get('text')}{extra} (confidence {t.get('confidence', 0):.2f})")
+            sig = t.get("chat_signal")
+            rated = f", colleagues rated answers using it 👍{sig['up']} 👎{sig['down']}" if sig else ""
+            out.append(f"- {t['id']}{tag}: {t.get(key) or t.get('text')}{extra} (confidence {t.get('confidence', 0):.2f}{rated})")
         return "\n".join(out) or "- (none)"
 
     return "\n".join([
@@ -327,6 +329,9 @@ def _score_traits(prof: dict, question: str) -> list[tuple[float, dict]]:
             if len(_specific_words(question)) >= 3 and _supported_word_count(question, body) < 2:
                 continue  # a shared name or generic word alone is not evidence for a different topic
             sc = (0.75 * cov + 0.25 * _overlap(question, body)) * w * boost.get(sec, 1.0)
+            sig = t.get("chat_signal") or {}
+            if sig:  # colleagues' 👍 / 👎 on earlier answers that used this trait
+                sc *= max(0.7, min(1.3, 1 + 0.08 * (sig.get("up", 0) - sig.get("down", 0))))
             if requested_versions:
                 versions = set(re.findall(r"(?<![a-z0-9])v\s*([1-9]\d*)\b", _fold(body)))
                 if requested_versions & versions:

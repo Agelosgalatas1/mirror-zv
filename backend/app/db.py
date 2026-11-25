@@ -159,6 +159,25 @@ CREATE TABLE IF NOT EXISTS self_test_events (
     created_at REAL NOT NULL,
     undone_at REAL
 );
+CREATE TABLE IF NOT EXISTS answer_ratings (
+    user_id TEXT NOT NULL,
+    target TEXT NOT NULL,
+    message_id INTEGER NOT NULL,
+    rating TEXT NOT NULL,
+    traits JSON NOT NULL DEFAULT '[]',
+    ts REAL NOT NULL,
+    PRIMARY KEY (user_id, target, message_id)
+);
+CREATE TABLE IF NOT EXISTS chat_gaps (
+    person_id TEXT NOT NULL,
+    qkey TEXT NOT NULL,
+    question TEXT NOT NULL,
+    asked INTEGER NOT NULL DEFAULT 1,
+    first_at REAL NOT NULL,
+    last_at REAL NOT NULL,
+    resolved_at REAL,
+    PRIMARY KEY (person_id, qkey)
+);
 CREATE TABLE IF NOT EXISTS persona_feedback (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     ts REAL NOT NULL,
@@ -236,7 +255,7 @@ def execute(sql: str, params: tuple | list = ()) -> int:
         return cur.lastrowid or 0
 
 
-_JSON_COLS = {"pii", "meta", "profile", "request", "response", "detail", "value", "results", "payload"}
+_JSON_COLS = {"pii", "meta", "profile", "request", "response", "detail", "value", "results", "payload", "traits"}
 
 
 def _row(r: sqlite3.Row) -> dict[str, Any]:
@@ -279,7 +298,8 @@ def reset_all() -> None:
     conn = connect()
     with _LOCK:
         for table in ("chunks", "items", "sources", "profile_versions", "drafts", "eval_runs", "blind_votes", "audit",
-                      "messages", "conversations", "persona_feedback", "voice_turns", "self_test_events", "trait_publications"):
+                      "messages", "conversations", "persona_feedback", "voice_turns", "self_test_events", "trait_publications",
+                      "answer_ratings", "chat_gaps"):
             conn.execute(f"DELETE FROM {table}")
 
 

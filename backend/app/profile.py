@@ -421,7 +421,8 @@ def for_twin() -> dict | None:
         for sec in INHERITABLE:
             prof[sec] = [t for t in inh if t["section"] == sec] + list(prof.get(sec, []))
         prof["inherited_from"] = [sharing.public_identity(a) for a in ancestors(pid())]
-    return prof
+    from . import learning  # 👍 / 👎 from every conversation move the weight of the traits they rated
+    return learning.apply(prof, pid(), SECTIONS)
 
 
 def trait_index(prof: dict) -> dict[str, dict]:

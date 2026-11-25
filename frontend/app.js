@@ -214,7 +214,7 @@ async function openThread(id) {
   state.busy = true; state.messages = [{ role: "loading" }]; paintChat(); paintSidebar(); loadAvatar();
   try {
     const turns = await api(`/api/mirrors/${ctx.mirror}/conversations/${state.thread}`, undefined, ctx);
-    state.messages = turns.flatMap(t => [{ role: "user", text: t.question }, { role: "ai", text: t.answer, explain: t.explain, voiceTurn: t.voice_turn_id || null }]);
+    state.messages = turns.flatMap(t => [{ role: "user", text: t.question }, { role: "ai", text: t.answer, explain: t.explain, messageId: t.turn_id, voiceTurn: t.voice_turn_id || null }]);
   } catch (error) {
     if (!currentContext(ctx)) return;
     state.messages = []; state.thread = null; store(threadKey(), null); toast(error.message, true);
@@ -244,7 +244,7 @@ async function send(text) {
   try {
     if (voiceTurn) {
       const r = await api(`/api/voice/${voiceTurn}/confirm`, { text: question, channel: state.channel }, ctx);
-      state.messages.splice(-1, 1, { role: "ai", text: r.answer, fresh: true, explain: r.explain, voiceTurn: r.has_audio ? voiceTurn : null }); state.offline = false;
+      state.messages.splice(-1, 1, { role: "ai", text: r.answer, fresh: true, explain: r.explain, messageId: r.message_id, voiceTurn: r.has_audio ? voiceTurn : null }); state.offline = false;
       const vt = state.threads.find(x => String(x.conversation_id) === String(r.conversation_id ?? state.thread));
       if (vt) { vt.updated_at = new Date().toISOString(); vt.last_question = question; vt.last_answer = r.answer; vt.turns = (Number(vt.turns) || 0) + 1; state.threads = [vt, ...state.threads.filter(x => x !== vt)]; }
       if (r.has_audio) { if (!fromVoiceDialog || (state.voiceOpen && state.voiceContinuous)) loadAvatar(voiceTurn); } else { state.voiceContinuous = false; toast("Η απάντηση είναι έτοιμη· η φωνή δεν ήταν διαθέσιμη αυτή τη φορά."); }
@@ -256,7 +256,7 @@ async function send(text) {
       const spoken = responseMode !== "text";
       const endpoint = spoken ? `/api/mirrors/${ctx.mirror}/spoken-ask` : `/api/mirrors/${ctx.mirror}/ask`;
       const r = await api(endpoint, { question, conversation_id: state.thread, channel: state.channel }, ctx);
-      state.messages.splice(-1, 1, { role: "ai", text: r.answer, fresh: true, explain: r.explain, voiceTurn: r.has_audio ? r.turn_id : null }); state.offline = false;
+      state.messages.splice(-1, 1, { role: "ai", text: r.answer, fresh: true, explain: r.explain, messageId: r.message_id, voiceTurn: r.has_audio ? r.turn_id : null }); state.offline = false;
       if (r.has_audio && mode() === responseMode) loadAvatar(r.turn_id);
       else if (spoken && !r.has_audio) toast("Η απάντηση είναι έτοιμη. Η φωνή δεν ήταν διαθέσιμη αυτή τη φορά.");
       const t = state.threads.find(x => String(x.conversation_id) === state.thread);
@@ -837,6 +837,18 @@ async function startSelfTest() {
       catch (error) { setError(error); }
       finally { model.busy = false; render(); }
     }
+    /* What colleagues' conversations taught this Mirror, and the questions it could not answer yet. */
+    const fromChats = () => {
+      const c = model.snapshot.chat_learning; if (!c) return null;
+      const stat = (n, label) => h("div", { class: "learn-stat" }, h("b", {}, String(n)), h("span", {}, label));
+      return h("section", { class: "self-test-learning" }, h("h3", {}, "Τι έμαθε το Mirror σου από τις συνομιλίες"),
+        h("div", { class: "learn-stats" }, stat(c.rated_answers, "απαντήσεις βαθμολογήθηκαν"), stat(c.traits_adjusted, "χαρακτηριστικά προσαρμόστηκαν"),
+          stat(c.questions_learned, "ερωτήσεις έμαθε από εσένα")),
+        c.questions.length ? [h("p", { class: "learn-lead" }, "Η ομάδα ρώτησε, το Mirror δεν ήξερε. Απάντησε εσύ και θα το ξέρει από εδώ και πέρα:"),
+          h("ul", { class: "learn-gaps" }, c.questions.map(q => h("li", {}, h("span", {}, q.question, q.asked > 1 ? h("small", {}, ` · ${q.asked} φορές`) : null),
+            h("button", { class: "btn compact", type: "button", disabled: model.busy, onclick: () => makeQuestion(q.question, "Γνώση της δουλειάς") }, "Απάντησέ το"))))]
+          : h("p", { class: "learn-lead" }, "Δεν υπάρχει ερώτηση της ομάδας που να περιμένει απάντηση."));
+    };
     async function makeQuestion(customQuestion = null, topic = model.selectedTopic) {
       model.busy = true; model.phase = "loading"; model.error = ""; model.current = null; render();
       try {
@@ -923,7 +935,7 @@ async function startSelfTest() {
           h("div", { class: "self-test-actions" }, h("button", { class: "btn primary", type: "button", onclick: () => { model.phase = "choose"; model.current = null; model.lastFeedback = null; render(); } }, "Επόμενη ερώτηση"),
             h("button", { class: "btn", type: "button", onclick: () => done(false) }, "Τέλος")));
       }
-      fill(panel, progress(), error, stage, publications(), history(),
+      fill(panel, progress(), error, stage, fromChats(), publications(), history(),
         h("p", { class: "self-test-privacy" }, "Η πρόοδος φαίνεται μόνο σε εσένα. Οι διορθώσεις σου γίνονται μέρος του προφίλ σου και μπορείς να τις αναιρέσεις."));
     }
     render();
@@ -1174,12 +1186,15 @@ function paintChat() {
     const rate = (btn, other, rating, label) => async () => {
       const ctx = conversationContext(); btn.disabled = true;
       try {
-        await api(`/api/mirrors/${ctx.mirror}/persona-feedback`, { rating }, ctx);
-        btn.setAttribute("aria-pressed", "true"); other.setAttribute("aria-pressed", "false"); m.rated = rating; toast(label);
+        const r = await api(`/api/mirrors/${ctx.mirror}/persona-feedback`, { rating, ...(m.messageId ? { message_id: m.messageId } : {}) }, ctx);
+        btn.setAttribute("aria-pressed", "true"); other.setAttribute("aria-pressed", "false"); m.rated = rating;
+        const n = r?.learned_from_traits || 0;
+        const verb = rating === "faithful" ? (n === 1 ? "ενισχύθηκε" : "ενισχύθηκαν") : (n === 1 ? "αποδυναμώθηκε" : "αποδυναμώθηκαν");
+        toast(n ? `${label} Το Mirror το έμαθε: ${verb} ${n} ${n === 1 ? "χαρακτηριστικό" : "χαρακτηριστικά"} του.` : label);
       } catch (error) { if (currentContext(ctx)) toast(error.message, true); }
       finally { if (currentContext(ctx)) btn.disabled = false; }
     };
-    up.onclick = rate(up, down, "faithful", "Ευχαριστούμε! Σημειώθηκε ότι μοιάζει."); down.onclick = rate(down, up, "uncharacteristic", "Ευχαριστούμε. Σημειώθηκε ότι δεν μοιάζει.");
+    up.onclick = rate(up, down, "faithful", "Ευχαριστούμε!"); down.onclick = rate(down, up, "uncharacteristic", "Ευχαριστούμε.");
     if (m.rated) (m.rated === "faithful" ? up : down).setAttribute("aria-pressed", "true");
     const listen = h("button", { "aria-label": "Άκουσε", title: "Άκουσε" }, icon(I.speaker, 15));
     listen.onclick = () => m.voiceTurn && mode() !== "text" ? loadAvatar(m.voiceTurn) : speakText(m.text, listen);

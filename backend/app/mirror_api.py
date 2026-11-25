@@ -19,7 +19,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import Response
 from pydantic import BaseModel, Field
 
-from . import db, profile, twin, voice, sharing
+from . import db, learning, profile, twin, voice, sharing
 from .auth import allowed_targets, current_user, has_ai
 from .context import as_person
 from .ingest import pipeline
@@ -261,6 +261,7 @@ def answer_in_conversation(user: dict, mid: str, question: str, cid: str | None,
     if stamp != sharing.access_fingerprint(user['id'], mid):
         raise HTTPException(409, "Οι δημοσιευμένοι κανόνες άλλαξαν. Ξαναστείλε την ερώτηση.")
     res['access_fingerprint'] = stamp
+    learning.record_turn(user['id'], mid, question, res)  # a question it could not answer goes to its owner
     if conv:
         now = time.time()
         db.execute("INSERT INTO messages(conversation_id, role, text, payload, created_at) VALUES(?,?,?,?,?)",
@@ -277,7 +278,8 @@ def answer_in_conversation(user: dict, mid: str, question: str, cid: str | None,
 def ask(mid: str, body: AskIn, user: dict = Depends(current_user)):
     guard(user, mid)
     res = answer_in_conversation(user, mid, body.question, body.conversation_id, body.channel)
-    return {"answer": res["answer"], "conversation_id": res.get("conversation_id"), "explain": explain(res)}
+    return {"answer": res["answer"], "conversation_id": res.get("conversation_id"), "explain": explain(res),
+            "message_id": res.get("message_id")}
 
 
 def _speak_into(turn_id: str, answer: str, mid: str) -> bool:
@@ -307,7 +309,7 @@ def spoken_ask(mid: str, body: AskIn, user: dict = Depends(current_user)):
                    "conversation_id") else None, res.get("message_id"), body.question, "PENDING", time.time(), res['access_fingerprint']))
     has_audio = _speak_into(turn_id, res["answer"], mid)
     return {"answer": res["answer"], "turn_id": turn_id, "has_audio": has_audio,
-            "conversation_id": res.get("conversation_id"), "explain": explain(res)}
+            "conversation_id": res.get("conversation_id"), "explain": explain(res), "message_id": res.get("message_id")}
 
 
 @router.post("/mirrors/{mid}/persona-feedback")
@@ -316,9 +318,16 @@ def persona_feedback(mid: str, body: dict, user: dict = Depends(current_user)):
     rating = body.get("rating")
     if rating not in ("faithful", "uncharacteristic"):
         raise HTTPException(400, "Μη έγκυρη αξιολόγηση.")
+    message_id = body.get("message_id")
+    if message_id is not None and not isinstance(message_id, int):
+        raise HTTPException(400, "Μη έγκυρη απάντηση.")
     db.execute("INSERT INTO persona_feedback(ts, user_id, target, message_id, rating) VALUES(?,?,?,?,?)",
-               (time.time(), user["id"], mid, None, rating))
-    return {"ok": True}
+               (time.time(), user["id"], mid, message_id, rating))
+    try:
+        learned = learning.rate(user["id"], mid, message_id, rating)  # the rating teaches the Mirror at once
+    except LookupError as exc:
+        raise HTTPException(404, str(exc)) from None
+    return {"ok": True, "learned_from_traits": learned["traits"]}
 
 
 # ------------------------------------------------------------------ voice and avatar
@@ -381,7 +390,8 @@ def confirm(tid: str, body: dict, user: dict = Depends(current_user)):
                (text, res.get("message_id"), tid))
     has_audio = _speak_into(tid, res["answer"], row["target"])
     return {"turn_id": tid, "answer": res["answer"], "has_audio": has_audio, "conversation_id": res.get("conversation_id"),
-            "explain": explain(res)}
+            "explain": explain(res),
+            "message_id": res.get("message_id")}
 
 
 @router.get("/voice/{tid}")
@@ -481,6 +491,8 @@ def self_test_state(user: dict) -> dict:
     me = pipeline.owner_dict(user["id"])
     return {"company_rules": company_rules, "mirror": {"id": user["id"], "name": me["name"]}, "topics": topics, "next_topic": nxt,
             "custom_questions": custom,
+            # what colleagues' conversations taught this Mirror, and the questions it could not answer yet
+            "chat_learning": {**learning.stats(user["id"]), "questions": learning.gaps(user["id"])},
             "events": [{"event_id": e["id"], "topic": e["topic"], "question": e["question"], "feedback": e["feedback"],
                         "correction": e["correction"], "undone_at": iso(e["undone_at"])} for e in events[:12]]}
 
@@ -587,6 +599,8 @@ def self_test_feedback(eid: int, body: FeedbackIn, user: dict = Depends(current_
             trait_id = prof["knowledge"][-1]["id"]
     db.execute("UPDATE self_test_events SET feedback=?, correction=?, trait_id=?, undone_at=NULL WHERE id=?",
                (body.feedback, correction or None, trait_id, eid))
+    if body.feedback == "correct" or trait_id:
+        learning.resolve(user["id"], e["question"])  # a colleague's open question is now answered
     return self_test_state(user)
 
 
@@ -601,4 +615,5 @@ def self_test_undo(eid: int, user: dict = Depends(current_user)):
             except KeyError:
                 pass
     db.execute("UPDATE self_test_events SET undone_at=? WHERE id=?", (time.time(), eid))
+    learning.reopen(user["id"], e["question"])
     return self_test_state(user)
