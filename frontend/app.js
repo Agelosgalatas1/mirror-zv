@@ -151,6 +151,23 @@ async function start(enterChat = false) {
   render();
   if (target) await openMirror(target, true);
   else if (view === "chat") unavailableChat();
+  applyLiveLink(target);
+}
+/* Live links for presentations: /?new=1&mode=avatar&ask=…#/chat/ceo opens a fresh chat with the CEO's Mirror in
+   Avatar mode with the question typed in (never sent by itself); ?voice=1 opens the voice orb, ?selftest=1 the
+   self-test. Access rules are unchanged: the link still needs a signed-in user who may open that Mirror. */
+function applyLiveLink(target) {
+  const q = new URLSearchParams(location.search);
+  if (![...q.keys()].length) return;
+  history.replaceState(null, "", location.pathname + location.hash);
+  if (q.get("selftest")) { startSelfTest(); return; }
+  if (!target) return;
+  if (q.get("new")) newChat();
+  const m = q.get("mode"); if (["text", "voice", "avatar"].includes(m)) setMode(m);
+  const ask = (q.get("ask") || "").trim();
+  const box = $("#composer");
+  if (ask && box) { box.value = ask.slice(0, 500); autosize(box); box.focus(); toast("Η ερώτηση είναι έτοιμη· πάτα Enter για αποστολή."); }
+  if (q.get("voice")) openVoice();
 }
 async function loadHierarchy(session) {
   let people = [], failed = false;
@@ -1164,6 +1181,7 @@ function paintChat() {
   if (!state.mirror) { fill(list, h("div", { class: "welcome" }, logo(64), h("h2", {}, "Δεν υπάρχει διαθέσιμο AI"), h("p", {}, "Ο ρόλος σου δεν έχει ακόμη πρόσβαση σε κάποιο πρόσωπο."))); return; }
   const p = personFor(state.mirror);
   if (!state.messages.length) {
+    const fb = $("#followups"); if (fb) { fb.hidden = true; fill(fb); }
     fill(list, h("div", { class: "welcome" }, avatar(p, "lg", true),
       h("h2", {}, new Date().getHours() < 12 ? "Καλημέρα!" : "Καλησπέρα!"),
       h("p", {}, `Είσαι σε συνομιλία με το AI αντίγραφο του προσώπου «${p.name}». Ρώτα ό,τι θα ρωτούσες κι από κοντά, και μετά ρώτα «γιατί;» για να δεις από πού το ξέρει.`),
